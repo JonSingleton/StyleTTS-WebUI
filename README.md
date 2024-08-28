@@ -8,6 +8,10 @@ An all-in-one inferencing and training WebUI for StyleTTS.  The intended compatb
 
 ✔️ Training tab with tensorboard monitoring available
 
+
+***** note that this is a fork of the initial work to put this in a webui by Jarod Mica - https://github.com/JarodMica?tab=repositories. This is just my little version with QOL changes that suit me.
+
+
 ## Setup
 There is no Linux or Mac set-up at the moment. However, I think the set-up on linux isn't too convoluted as it doesn't require any code modifications, just installation modifications.  I believe you do not need to uninstall and reinstall torch and then the back slashes should be replaced with forward slashes in the commands below.
 
