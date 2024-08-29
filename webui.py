@@ -699,15 +699,32 @@ def main():
                                         train_data_path = None
                                         val_data_path = None
                                         audio_data_path = None
-                                    
-                                    voice_name = gr.Dropdown(label="Voice Name", choices=train_list, value=train_list[0] if train_list else None) 
-                                    refresh_available_config_button = gr.Button(value="Refresh Available")
-                                    save_freq = gr.Slider(label="Save Frequency", minimum=1, maximum=1000, value=10, step=1)
+                                    with gr.Row():
+                                        voice_name = gr.Dropdown(label="Voice Name", choices=train_list, value=train_list[0] if train_list else None, scale=6) 
+                                        refresh_available_config_button = gr.Button(value="Refresh Available", scale=1)
+                                        
+                                    save_freq = gr.Slider(label="Save Frequency", minimum=1, maximum=1000, value=1, step=1)
                                     log_interval = gr.Slider(label="Log Interval", minimum=1, maximum=100, step=1, value=10)
-                                    epochs = gr.Slider(label="Epochs", minimum=1, maximum=100, step=1, value=40)
-                                    batch_size = gr.Slider(label="Batch Size", minimum=1, maximum=100, step=1, value=2)
-                                    max_len = gr.Slider(label="Max Length", minimum=50, maximum=1000, step=10, value=250)
-                                    pretrained_model = gr.Textbox(label="Pretrained Model", value=r"models\pretrain_base_1\epochs_2nd_00020.pth")
+                                    epochs = gr.Slider(label="Epochs", minimum=1, maximum=1000, step=1, value=500)
+                                    batch_size = gr.Slider(label="Batch Size", minimum=1, maximum=100, step=1, value=1)
+                                    max_len = gr.Slider(label="Max Length", minimum=50, maximum=1000, step=10, value=160) # personal max, allows for generation during training without pushing into shared mem.
+                                    
+                                    list_of_models = get_voice_models()
+
+                                    with gr.Row():
+                                        pretrained_model = gr.Dropdown(
+                                            choices=list_of_models, label="Pretrained Model", type="value", value=list_of_models[0], scale=6)
+                                        refresh_models_available_button = gr.Button(
+                                            value="Refresh Available"
+                                        )
+                                        
+                                        def update_models():
+                                            list_of_models = get_voice_models()
+                                            return gr.Dropdown(choices=list_of_models, scale=1)
+                                        
+                                        refresh_models_available_button.click(fn=update_models,
+                                                                            outputs=pretrained_model
+                                        )
                                     load_only_params = gr.Checkbox(value=True, label="Load Only Params")
                                     
                                     diff_epoch = gr.Number(label="Diffusion Epoch", value=0)
@@ -851,7 +868,7 @@ def main():
                 break
     
     webbrowser.open(f"http://localhost:{webui_port}")
-    demo.launch()
+    demo.launch(server_name="0.0.0.0", server_port=webui_port)
 
 if __name__ == "__main__":
     main()
