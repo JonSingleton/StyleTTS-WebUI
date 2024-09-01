@@ -1,2 +1,2 @@
 call venv\Scripts\activate
-tensorboard --logdir training
+python -m tensorboard.main --logdir training

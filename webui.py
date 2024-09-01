@@ -45,6 +45,7 @@ from Utils.splitcombine import split_and_recombine_text
 # Path to the settings file
 SETTINGS_FILE_PATH = "Configs/generate_settings.yaml"
 GENERATE_SETTINGS = {}
+GENERATE_SETTINGS = {}
 TRAINING_DIR = "training"
 BASE_CONFIG_FILE_PATH = r"Configs\template_config_ft.yml"
 WHISPER_MODELS = ["tiny", "base", "small", "medium", "large", "large-v1", "large-v2", "large-v3"]
@@ -59,6 +60,7 @@ VALID_AUDIO_EXT = [
 ]
 
 
+
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 global_phonemizer = None
 model = None
@@ -66,9 +68,63 @@ model_params = None
 sampler = None
 textcleaner = None
 to_mel = None
+params_whole = None
+
+# chaptertext = 'Dale Carnegie During the first thirty-five years of the twentieth century, the publishing houses of America printed more than a fifth of a million different books. Most of them were deadly dull, and many were financial failures. "Many," did I say? The president of one of the largest publishing houses in the world confessed to me that his company, after seventy-five years of publishing experience, still lost money on seven out of every eight books it published. Why, then, did I have the temerity to write another book? And, after I had written it, why should you bother to read it? Fair questions, both; and I\'ll try to answer them. I have, since 1912, been conducting educational courses for business and professional men and women in New York. At first, I conducted courses in public speaking only - courses designed to train adults, by actual experience, to think on their feet and express their ideas with more clarity, more effectiveness and more poise, both in business interviews and before groups. But gradually, as the seasons passed, I realized that as sorely as these adults needed training in effective speaking, they needed still more training in the fine art of getting along with people in everyday business and social contacts. I also gradually realized that I was sorely in need of such training myself. As I look back across the years, I am appalled at my own frequent lack of finesse and understanding. How I wish a book such as this had been placed in my hands twenty years ago! What a priceless boon it would have been. Dealing with people is probably the biggest problem you face, especially if you are in business. Yes, and that is also true if you are a housewife, architect or engineer. Research done a few years ago under the auspices of the Carnegie Foundation for the Advancement of Teaching uncovered a most important and significant fact - a fact later confirmed by additional studies made at the Carnegie Institute of Technology. These investigations revealed that even in such technical lines as engineering, about 15 percent of one\'s financial success is due to one\'s technical knowledge and about 85 percent is due to skill in human engineering-to personality and the ability to lead people. For many years, I conducted courses each season at the Engineers\' Club of Philadelphia, and also courses for the New York Chapter of the American Institute of Electrical Engineers. A total of probably more than fifteen hundred engineers have passed through my classes. They came to me because they had finally realized, after years of observation and experience, that the highest-paid personnel in engineering are frequently not those who know the most about engineering. One can for example, hire mere technical ability in engineering, accountancy, architecture or any other profession at nominal salaries. But the person who has technical knowledge plus the ability to express ideas, to assume leadership, and to arouse enthusiasm among people-that person is headed for higher earning power. In the heyday of his activity, John D. Rockefeller said that "the ability to deal with people is as purchasable a commodity as sugar or coffee." "And I will pay more for that ability," said John D., "than for any other under the sun." Wouldn\t you suppose that every college in the land would conduct courses to develop the highest-priced ability under the sun? But if there is just one practical, common-sense course of that kind given for adults in even one college in the land, it has escaped my attention up to the present writing. The University of Chicago and the United Y.M.C.A. Schools conducted a survey to determine what adults want to study. That survey cost $25,000 and took two years. The last part of the survey was made in Meriden, Connecticut. It had been chosen as a typical American town. Every adult in Meriden was interviewed and requested to answer 156 questions-questions such as "What is your business or profession? Your education? How do you spend your spare time? What is your income? Your hobbies? Your ambitions? Your problems? What subjects are you most interested in studying?" And so on. That survey revealed that health is the prime interest of adults and that their second interest is people; how to understand and get along with people; how to make people like you; and how to win others to your way of thinking. So the committee conducting this survey resolved to conduct such a course for adults in Meriden. They searched diligently for a practical textbook on the subject and found-not one. Finally they approached one of the world\'s outstanding authorities on adult education and asked him if he knew of any book that met the needs of this group. "No," he replied, "I know what those adults want. But the book they need has never been written." I knew from experience that this statement was true, for I myself had been searching for years to discover a practical, working handbook on human relations. Since no such book existed, I have tried to write one for use in my own courses. And here it is. I hope you like it. In preparation for this book, I read everything that I could find on the subject- everything from newspaper columns, magazine articles, records of the family courts, the writings of the old philosophers and the new psychologists. In addition, I hired a trained researcher to spend one and a half years in various libraries reading everything I had missed, plowing through erudite tomes on psychology, poring over hundreds of magazine articles, searching through countless biographies, trying to ascertain how the great leaders of all ages had dealt with people. We read their biographies, We read the life stories of all great leaders from Julius Caesar to Thomas Edison. I recall that we read over one hundred biographies of Theodore Roosevelt alone. We were determined to spare no time, no expense, to discover every practical idea that anyone had ever used throughout the ages for winning friends and influencing people. I personally interviewed scores of successful people, some of them world-famous-inventors like Marconi and Edison; political leaders like Franklin D. Roosevelt and James Farley; business leaders like Owen D. Young; movie stars like Clark Gable and Mary Pickford; and explorers like Martin Johnson-and tried to discover the techniques they used in human relations. From all this material, I prepared a short talk. I called it "How to Win Friends and Influence People." I say "short." It was short in the beginning, but it soon expanded to a lecture that consumed one hour and thirty minutes. For years, I gave this talk each season to the adults in the Carnegie Institute courses in New York. I gave the talk and urged the listeners to go out and test it in their business and social contacts, and then come back to class and speak about their experiences and the results they had achieved. What an interesting assignment! These men and women, hungry for self- improvement, were fascinated by the idea of working in a new kind of laboratory - the first and only laboratory of human relationships for adults that had ever existed. This book wasn\'t written in the usual sense of the word. It grew as a child grows. It grew and developed out of that laboratory, out of the experiences of thousands of adults. Years ago, we started with a set of rules printed on a card no larger than a postcard. The next season we printed a larger card, then a leaflet, then a series of booklets, each one expanding in size and scope. After fifteen years of experiment and research came this book. The rules we have set down here are not mere theories or guesswork. They work like magic. Incredible as it sounds, I have seen the application of these principles literally revolutionize the lives of many people. To illustrate: A man with 314 employees joined one of these courses. For years, he had driven and criticized and condemned his employees without stint or discretion. Kindness, words of appreciation and encouragement were alien to his lips. After studying the principles discussed in this book, this employer sharply altered his philosophy of life. His organization is now inspired with a new loyalty, a new enthusiasm, a new spirit of team- work. Three hundred and fourteen enemies have been turned into 314 friends. As he proudly said in a speech before the class: "When I used to walk through my establishment, no one greeted me. My employees actually looked the other way when they saw me approaching. But now they are all my friends and even the janitor calls me by my first name." This employer gained more profit, more leisure and -what is infinitely more important-he found far more happiness in his business and in his home. Countless numbers of salespeople have sharply increased their sales by the use of these principles. Many have opened up new accounts - accounts that they had formerly solicited in vain. Executives have been given increased authority, increased pay. One executive reported a large increase in salary because he applied these truths. Another, an executive in the Philadelphia Gas Works Company, was slated for demotion when he was sixty-five because of his belligerence, because of his inability to lead people skillfully. This training not only saved him from the demotion but brought him a promotion with increased pay. On innumerable occasions, spouses attending the banquet given at the end of the course have told me that their homes have been much happier since their husbands or wives started this training. People are frequently astonished at the new results they achieve. It all seems like magic. In some cases, in their enthusiasm, they have telephoned me at my home on Sundays because they couldn\'t wait forty-eight hours to report their achievements at the regular session of the course. One man was so stirred by a talk on these principles that he sat far into the night discussing them with other members of the class. At three o\'clock in the morning, the others went home. But he was so shaken by a realization of his own mistakes, so inspired by the vista of a new and richer world opening before him, that he was unable to sleep. He didn\'t sleep that night or the next day or the next night. Who was he? A naive, untrained individual ready to gush over any new theory that came along? No, Far from it. He was a sophisticated, blase dealer in art, very much the man about town, who spoke three languages fluently and was a graduate of two European universities. While writing this chapter, I received a letter from a German of the old school, an aristocrat whose forebears had served for generations as professional army officers under the Hohenzollerns. His letter, written from a transatlantic steamer, telling about the application of these principles, rose almost to a religious fervor. Another man, an old New Yorker, a Harvard graduate, a wealthy man, the owner of a large carpet factory, declared he had learned more in fourteen weeks through this system of training about the fine art of influencing people than he had learned about the same subject during his four years in college. Absurd? Laughable? Fantastic? Of course, you are privileged to dismiss this statement with whatever adjective you wish. I am merely reporting, without comment, a declaration made by a conservative and eminently successful Harvard graduate in a public address to approximately six hundred people at the Yale Club in New York on the evening of Thursday, February 23, 1933. "Compared to what we ought to be," said the famous Professor William James of Harvard, "compared to what we ought to be, we are only half awake. We are making use of only a small part of our physical and mental resources. Stating the thing broadly, the human individual thus lives far within his limits. He possesses powers of various sorts which he habitually fails to use," Those powers which you "habitually fail to use"! The sole purpose of this book is to help you discover, develop and profit by those dormant and unused assets, "Education," said Dr. John G. Hibben, former president of Princeton University, "is the ability to meet life\'s situations," If by the time you have finished reading the first three chapters of this book- if you aren\'t then a little better equipped to meet life\'s situations, then I shall consider this book to be a total failure so far as you are concerned. For "the great aim of education," said Herbert Spencer, "is not knowledge but action." And this is an action book.'
+# # chaptertext = [line for line in [line.strip() for line in chaptertext.split("\"")] if line]
+# # print(chaptertext.split("\""))
+# from cleantext import clean
+# chaptertext = clean(chaptertext,
+#     fix_unicode=True,               # fix various unicode errors
+#     to_ascii=True,                  # transliterate to closest ASCII representation
+#     lower=False,                     # lowercase text
+#     no_line_breaks=True,           # fully strip line breaks as opposed to only normalizing them
+#     no_urls=False,                  # replace all URLs with a special token
+#     no_emails=False,                # replace all email addresses with a special token
+#     no_phone_numbers=False,         # replace all phone numbers with a special token
+#     no_numbers=False,               # replace all numbers with a special token
+#     no_digits=False,                # replace all digits with a special token
+#     no_currency_symbols=False,      # replace all currency symbols with a special token
+#     no_punct=False,                 # remove punctuations
+#     replace_with_punct="",          # instead of removing punctuations you may replace them
+#     replace_with_url="<URL>",
+#     replace_with_email="<EMAIL>",
+#     replace_with_phone_number="<PHONE>",
+#     replace_with_number="<NUMBER>",
+#     replace_with_digit="0",
+#     replace_with_currency_symbol="<CUR>",
+#     lang="en"                       # set to 'de' for German special handling
+# )
+# import shlex
+
+# # user shlex to split string out to separate out quotes being made
+# chaptertext = shlex.split(chaptertext, posix=False)
+
+# # since everything that isn't a quote is split word-by-word, fix that
+# textlist = []
+# unquotedElement = ''
+
+# for t in chaptertext:
+#     # if the element isn't a quote, keep concatenating to rebuild the sentence.
+#     if not t.startswith("\"") and not t.endswith("\""):
+#         unquotedElement = f'{unquotedElement} {t}'
+#         # print(unquotedElement)
+#     else:
+#         # once it hits a quote, add the whole concatenated var as an element to a new list, then the whole quote as another
+#         if not unquotedElement.endswith("."):
+#             # tts tweak to make it sound better on quote continuations mid sentence
+#             unquotedElement = f'{unquotedElement}:'
+#         textlist.append(unquotedElement.lstrip())
+#         textlist.append(t)
+#         # wipe the concatenated var to start anew
+#         unquotedElement = ''
+
+# for i in textlist:
+#     print(i)
+
 
 def load_all_models(model_path):
-    global global_phonemizer, model, model_params, sampler, textcleaner, to_mel
+    global global_phonemizer, model, model_params, sampler, textcleaner, to_mel, params_whole
     
     model_config = (get_model_configuration(model_path))
     if not model_config:
@@ -87,8 +143,59 @@ def load_all_models(model_path):
     to_mel = torchaudio.transforms.MelSpectrogram(
         n_mels=80, n_fft=2048, win_length=1200, hop_length=300)
     
-    load_pretrained_model(model, model_path=model_path)
+    params_whole = load_pretrained_model(model, model_path=model_path)
     return False
+
+def unload_all_models():
+    global global_phonemizer, model, model_params, sampler, textcleaner, to_mel, params_whole
+
+    if global_phonemizer:
+        del global_phonemizer
+        global_phonemizer = None
+        print("Unloaded phonemizer")
+
+    if model:
+        del model
+        model = None
+        print("Unloaded model")
+
+    if model_params:
+        del model_params
+        model_params = None
+        print("Unloaded model params")
+
+    if sampler:
+        del sampler
+        sampler = None
+        print("Unloaded sampler")
+
+    if textcleaner:
+        del textcleaner
+        textcleaner = None
+        print("Unloaded textcleaner")
+
+    if to_mel:
+        del to_mel
+        to_mel = None
+        print("Unloaded to_mel")
+
+    if params_whole:
+        del params_whole
+        params_whole = None
+        print("Unloaded params_whole")
+
+    do_gc()
+    torch.cuda.empty_cache()
+
+    gr.Info("All models unloaded.")
+
+def do_gc():
+    import gc
+    gc.collect()
+    try:
+        torch.cuda.empty_cache()
+    except Exception as e:
+        pass
     
 def get_file_path(root_path, voice, file_extension, error_message):
     model_path = os.path.join(root_path, voice)
@@ -113,7 +220,69 @@ def get_model_configuration(model_path):
 def load_voice_model(voice):
     return get_file_path(root_path="models", voice=voice, file_extension=".pth", error_message="No TTS model found in specified location")
 
-def generate_audio(text, voice, reference_audio_file, seed, alpha, beta, diffusion_steps, embedding_scale, voice_model, voices_root="voices",):
+def generate_audiobook_audio(text, voice, reference_audio_file, seed, alpha, beta, diffusion_steps, embedding_scale, chapters_directory, audio_opt_path=None, voices_root="voices",):
+    # At a place where it no longer makes sense to make generate_audio differentiate between user prompts and ebook generation.
+    # Splitting them out to implement a method of using separate audio generation configurations for when a quote is being read 
+    # to make it easier to differentiate when listening.
+    from Utils.ebookgenerator import combine_wav_files, remove_folder_with_contents
+    originalBeta = beta
+    original_seed = int(seed)
+
+    fragmentDirectory = os.path.join(chapters_directory, 'fragments')
+    os.makedirs(fragmentDirectory, exist_ok=True)
+    i = 0
+
+    print(text)
+
+    for t in text:
+        beta = originalBeta
+        if  t.startswith("\"") and  t.endswith("\""):
+            if beta > 0.2:
+                beta = beta - 0.2 # modify beta just to test for now
+            else:
+                beta = beta + 0.2
+            t = f'quote: {t}. unquote.'
+            
+
+        # begin generation
+        
+        reference_audio_path = os.path.join(voices_root, voice, reference_audio_file)
+        reference_dicts = {f'{voice}': f"{reference_audio_path}"}
+        
+        start = time.time()
+        if original_seed==-1:
+            seed_value = random.randint(0, 2**32 - 1)
+        else:
+            seed_value = original_seed
+        set_seeds(seed_value)
+        for k, path in reference_dicts.items():
+            mean, std = -4, 4
+            ref_s = compute_style(path, model, to_mel, mean, std, device)
+
+            texts = split_and_recombine_text(t)
+            audios = []
+            
+            for t in texts:
+                print(f'Generating: {t}')
+                audios.append(inference(t, ref_s, model, sampler, textcleaner, to_mel, device, model_params, global_phonemizer=global_phonemizer, alpha=alpha, beta=beta, diffusion_steps=diffusion_steps, embedding_scale=embedding_scale))
+
+            rtf = (time.time() - start)
+            # print(f"RTF = {rtf:5f}")
+
+            
+            write(os.path.join(fragmentDirectory, f'{i}.wav'), 24000, np.concatenate(audios))
+            i += 1
+    
+    audio_opt_dir = os.path.dirname(audio_opt_path)
+    audio_opt_filename = os.path.basename(audio_opt_path)
+
+    combine_wav_files(fragmentDirectory,audio_opt_dir,audio_opt_filename)
+
+    # clean up
+    remove_folder_with_contents(fragmentDirectory)
+            
+
+def generate_audio(text, voice, reference_audio_file, seed, alpha, beta, diffusion_steps, embedding_scale, voice_model, audio_opt_path=None, voices_root="voices",):
     original_seed = int(seed)
     reference_audio_path = os.path.join(voices_root, voice, reference_audio_file)
     reference_dicts = {f'{voice}': f"{reference_audio_path}"}
@@ -126,39 +295,42 @@ def generate_audio(text, voice, reference_audio_file, seed, alpha, beta, diffusi
     set_seeds(seed_value)
     for k, path in reference_dicts.items():
         mean, std = -4, 4
-        # print(f'model:{model}')
         ref_s = compute_style(path, model, to_mel, mean, std, device)
 
         texts = split_and_recombine_text(text)
         audios = []
         
-        # wav1 = inference(text, ref_s, model, sampler, textcleaner, to_mel, device, model_params, global_phonemizer=global_phonemizer, alpha=alpha, beta=beta, diffusion_steps=diffusion_steps, embedding_scale=embedding_scale)
         for t in texts:
+            # print(f'Generating: {t}')
             audios.append(inference(t, ref_s, model, sampler, textcleaner, to_mel, device, model_params, global_phonemizer=global_phonemizer, alpha=alpha, beta=beta, diffusion_steps=diffusion_steps, embedding_scale=embedding_scale))
 
         rtf = (time.time() - start)
-        print(f'inference({text}, {ref_s}, {model}, {sampler}, {textcleaner}, {to_mel}, {device}, {model_params}, global_phonemizer={global_phonemizer}, alpha={alpha}, beta={beta}, diffusion_steps={diffusion_steps}, embedding_scale={embedding_scale})')
         print(f"RTF = {rtf:5f}")
-        print(f"{k} Synthesized:")
-        os.makedirs("results", exist_ok=True)
-        audio_opt_path = os.path.join("results", f"{voice}_output.wav")
-        write(audio_opt_path, 24000, np.concatenate(audios))
-    
-    # Save the settings after generation
-    save_settings({
-        "text": text,
-        "voice": voice,
-        "reference_audio_file": reference_audio_file,
-        "seed": original_seed if original_seed == -1 else seed_value,
-        "alpha": alpha,
-        "beta": beta,
-        "diffusion_steps": diffusion_steps,
-        "embedding_scale": embedding_scale,
-        "voice_model" : voice_model
-    })
+        
 
-
-    return audio_opt_path, [[seed_value]]
+        if audio_opt_path is None: # if this function isn't called with the audiobook arg set to True, write output normally
+            print(f"{k} Synthesized:")
+            
+            os.makedirs("results", exist_ok=True)
+            audio_opt_path = os.path.join("results", f"{voice}_output.wav")
+                
+            save_settings({
+                "text": text,
+                "voice": voice,
+                "reference_audio_file": reference_audio_file,
+                "seed": original_seed if original_seed == -1 else seed_value,
+                "alpha": alpha,
+                "beta": beta,
+                "diffusion_steps": diffusion_steps,
+                "embedding_scale": embedding_scale,
+                "voice_model" : voice_model
+            })
+           
+            write(audio_opt_path, 24000, np.concatenate(audios))
+            return audio_opt_path, [[seed_value]]
+        else:
+            write(audio_opt_path, 24000, np.concatenate(audios))
+            return audios
 
 def train_model(data):
     return f"Model trained with data: {data}"
@@ -258,7 +430,7 @@ def update_button_proxy():
     voice_list_with_defaults = get_voice_list(append_defaults=True)
     datasets_list = get_voice_list(get_voice_dir("datasets"), append_defaults=True)
     train_list = get_folder_list(root="training")
-    return gr.Dropdown(choices=voice_list_with_defaults), gr.Dropdown(choices=datasets_list), gr.Dropdown(choices=train_list), gr.Dropdown(choices=train_list)
+    return gr.Dropdown(choices=voice_list_with_defaults), gr.Dropdown(choices=datasets_list), gr.Dropdown(choices=voice_list_with_defaults), gr.Dropdown(choices=train_list), gr.Dropdown(choices=train_list)
 
 def update_data_proxy(voice_name):
     train_data = os.path.join(TRAINING_DIR, voice_name,"train_phoneme.txt")
@@ -777,8 +949,7 @@ def main():
                                 training_console = gr.Textbox(label="Training Console")
                                 start_train_button = gr.Button(value="Start Training")
                         with gr.Row():
-                            launch_tensorboard_button = gr.Button(value="Launch Tensorboard")
-                            
+                            launch_tensorboard_button = gr.Button(value="Launch Tensorboard")  
                     
             update_config_button.click(update_config, inputs=[
                                     voice_name, save_freq, log_interval, epochs, batch_size, max_len, pretrained_model,
@@ -823,13 +994,220 @@ def main():
                                 root_path
                             ])
             
+            with gr.TabItem("Generate Audiobook"):
+                with gr.Column():
+                    ebook_file = gr.File(label="eBook File",height=50)
+                    GENERATE_SETTINGS["voice_model"] = gr.Dropdown(
+                        choices=list_of_models, label="Voice Models", type="value", value=initial_settings["voice_model"], scale=6)
+                    refresh_models_available_button = gr.Button(
+                        value="Refresh Models Available", scale=1)
+
+                convert_btn = gr.Button("Convert to Audiobook", variant="primary")
+                output = gr.Textbox(label="Conversion Status")
+                audio_player = gr.Audio(label="Audiobook Player", type="filepath")
+                download_btn = gr.Button("Download Audiobook Files")
+                download_files = gr.File(label="Download Files", interactive=False)
+
+                from Utils.ebookgenerator import remove_folder_with_contents,create_chapter_labeled_book,sent_tokenize,re,create_m4b_from_chapters,download_audiobooks
+
+                def convert_ebook_to_audio(ebook_file, voice, reference_audio_file, seed, alpha, beta, diffusion_steps, embedding_scale, voice_model, progress=gr.Progress()):
+                    ebook_file_path = ebook_file.name
+
+                    workingDir = chapter_text = re.sub('[^a-zA-Z0-9\n\.]', '', os.path.splitext(os.path.basename(ebook_file_path))[0])
+                    print(workingDir)
+
+                    # working = os.path.join(".", "working", "temp_ebook")
+                    full_folder_working = os.path.join(".", "audiobooks", "working")
+                    chapters_directory = os.path.join(".", "audiobooks",  "working", "temp_ebook")
+                    output_audio_directory = os.path.join(".", "audiobooks",  "working", "temp_ebook")
+                    output_audio_directory_combined = os.path.join(".", "audiobooks",  "working", "temp_ebook", "combined")
+                    # remove_folder_with_contents(full_folder_working)
+                    # remove_folder_with_contents(output_audio_directory)
+                    os.makedirs(chapters_directory, exist_ok=True)
+                    os.makedirs(output_audio_directory, exist_ok=True)
+                    os.makedirs(output_audio_directory_combined, exist_ok=True)
+
+                    try:
+                        progress(0, desc="Starting conversion")
+                    except Exception as e:
+                        print(f"Error updating progress: {e}")
+
+                    try: # Check that calibre is installed
+                        subprocess.run(['ebook-convert', '--version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    except FileNotFoundError:
+                        print("Calibre is not installed. Please install Calibre for this functionality.")
+                    
+                    try:
+                        progress(0.1, desc="Creating chapter-labeled book")
+                    except Exception as e:
+                        print(f"Error updating progress: {e}")
+                    
+                    create_chapter_labeled_book(ebook_file_path)
+                    audiobook_output_path = os.path.join(".", "audiobooks")
+                    
+                    try:
+                        progress(0.3, desc="Converting chapters to audio")
+                    except Exception as e:
+                        print(f"Error updating progress: {e}")
+
+                    # convert each chapter into generated audio
+                    def atoi(text):
+                        return int(text) if text.isdigit() else text
+
+                    def natural_keys(text):
+                        '''
+                        alist.sort(key=natural_keys) sorts in human order
+                        http://nedbatchelder.com/blog/200712/human_sorting.html
+                        (See Toothy's implementation in the comments)
+                        '''
+                        return [ atoi(c) for c in re.split(r'(\d+)', text) ]
+                    
+                    sortedFileList = os.listdir(chapters_directory)
+                    sortedFileList.sort(key=natural_keys)
+                    print(sortedFileList)
+
+                    # for chapter_file in sortedFileList:
+                    #     if chapter_file.endswith(".wav"):
+                    #         os.path.splitext(os.path.basename("chapter_file"))[0]
+
+                    from string import printable
+                    from cleantext import clean
+                    for chapter_file in sorted(os.listdir(chapters_directory)):
+                        if chapter_file.endswith('.txt'):
+                            print(os.path.join(chapters_directory, "audio", chapter_file.replace(".txt", ".wav")))
+                            print(f'{chapters_directory}/audio_{chapter_file.replace(".txt", ".wav")}')
+                            if os.path.isfile(os.path.join(chapters_directory, "audio", chapter_file.replace(".txt", ".wav"))): # don't regenerate a chapter that exists
+                                print(f'{chapter_file.replace(".txt", ".wav")} already created, skipping epub conversion.')
+                                continue
+                            else:
+                                match = re.search(r"chapter_(\d+).txt", chapter_file)
+                                print(f'Narrating {match}')
+                                if match:
+                                    chapter_num = int(match.group(1))
+                                else:
+                                    print(f"Skipping file {chapter_file} as it does not match the expected format.")
+                                    continue
+
+                                chapter_path = os.path.join(chapters_directory, chapter_file)
+                                output_file_name = f"audio_chapter_{chapter_num}.wav"
+                                output_file_path = os.path.join(output_audio_directory, output_file_name)
+                                output_file_combined_path = os.path.join(chapters_directory, 'combined.wav')
+                                tokenizedChapterText = ''
+
+                                with open(chapter_path, 'r', encoding='utf-8') as file:
+                                    # chapter_text = file.read()
+                                    chapter_text = re.sub("[^{}]+".format(printable), "", file.read())
+                                    # sentences = sent_tokenize(chapter_text, language='english')
+                                    # for sentence in tqdm(sentences, desc=f"Chapter {chapter_num}"):
+                                    #     tokenizedChapterText += sentence
+                                    
+                                chapter_text = clean(chapter_text,
+                                    fix_unicode=True,               # fix various unicode errors
+                                    to_ascii=True,                  # transliterate to closest ASCII representation
+                                    lower=False,                     # lowercase text
+                                    no_line_breaks=True,           # fully strip line breaks as opposed to only normalizing them
+                                    no_urls=False,                  # replace all URLs with a special token
+                                    no_emails=False,                # replace all email addresses with a special token
+                                    no_phone_numbers=False,         # replace all phone numbers with a special token
+                                    no_numbers=False,               # replace all numbers with a special token
+                                    no_digits=False,                # replace all digits with a special token
+                                    no_currency_symbols=False,      # replace all currency symbols with a special token
+                                    no_punct=False,                 # remove punctuations
+                                    replace_with_punct="",          # instead of removing punctuations you may replace them
+                                    replace_with_url="<URL>",
+                                    replace_with_email="<EMAIL>",
+                                    replace_with_phone_number="<PHONE>",
+                                    replace_with_number="<NUMBER>",
+                                    replace_with_digit="0",
+                                    replace_with_currency_symbol="<CUR>",
+                                    lang="en"                       # set to 'de' for German special handling
+                                )
+
+                                # Idea: split out quoted strings so they can easily be targeted to use a different
+                                # target voice file, making it easier to understand while listening.
+                                import shlex
+
+                                # use shlex to split string out to separate out quotes being made
+                                chaptertext = shlex.split(chapter_text, posix=False)
+
+                                # since everything that isn't a quote is split word-by-word, fix that
+                                textlist = []
+                                unquotedElement = ''
+
+                                for t in chaptertext:
+                                    # if the element isn't a quote, keep concatenating to rebuild the sentence.
+                                    if not t.startswith("\"") and not t.endswith("\""):
+                                        unquotedElement = f'{unquotedElement} {t}'
+                                        # print(unquotedElement)
+                                    else:
+                                        # once it hits a quote, add the whole concatenated var as an element to a new list, then the whole quote as another
+                                        if len(unquotedElement) > 0: # only append if there's something there. Fixes issues with ['"whats up?"','"nothing."'] for example
+                                            textlist.append(unquotedElement.lstrip())
+                                        textlist.append(t)
+                                        # wipe the concatenated var to start anew
+                                        unquotedElement = ''
+                                if len(unquotedElement) > 0:
+                                    textlist.append(unquotedElement.lstrip()) # woops
+                                    
+                                generate_audiobook_audio( 
+                                    textlist,
+                                    voice, 
+                                    reference_audio_file, 
+                                    seed, 
+                                    alpha, 
+                                    beta, 
+                                    diffusion_steps, 
+                                    embedding_scale, 
+                                    chapters_directory,
+                                    output_file_path)
+                                
+                    print(f"All chapters converted to audio ")
+    
+                    try:
+                        progress(0.9, desc="Creating M4B from chapters")
+                    except Exception as e:
+                        print(f"Error updating progress: {e}")
+                    
+                    create_m4b_from_chapters(output_audio_directory, ebook_file_path, audiobook_output_path)
+                    
+                    # Get the name of the created M4B file
+                    m4b_filename = os.path.splitext(os.path.basename(ebook_file_path))[0] + '.m4b'
+                    m4b_filepath = os.path.join(audiobook_output_path, m4b_filename)
+
+                    try:
+                        progress(1.0, desc="Conversion complete")
+                    except Exception as e:
+                        print(f"Error updating progress: {e}")
+                    print(f"Audiobook created at {m4b_filepath}")
+                    return f"Audiobook created at {m4b_filepath}", m4b_filepath
+
+                convert_btn.click(convert_ebook_to_audio,
+                                    inputs=[ebook_file,
+                                            GENERATE_SETTINGS["voice"],
+                                            GENERATE_SETTINGS["reference_audio_file"],
+                                            GENERATE_SETTINGS["seed"],
+                                            GENERATE_SETTINGS["alpha"],
+                                            GENERATE_SETTINGS["beta"],
+                                            GENERATE_SETTINGS["diffusion_steps"],
+                                            GENERATE_SETTINGS["embedding_scale"],
+                                            GENERATE_SETTINGS["voice_model"]],
+                                    outputs=[output, audio_player]
+                )
+
+                download_btn.click(
+                    download_audiobooks,
+                    outputs=[download_files]
+                )          
+            
             with gr.TabItem("Settings"):
                 list_of_models = get_voice_models()
-                GENERATE_SETTINGS["voice_model"] = gr.Dropdown(
-                    choices=list_of_models, label="Voice Models", type="value", value=initial_settings["voice_model"])
-                refresh_models_available_button = gr.Button(
-                    value="Refresh Models Available"
-                )
+                with gr.Row():
+                    GENERATE_SETTINGS["voice_model"] = gr.Dropdown(
+                        choices=list_of_models, label="Voice Models", type="value", value=initial_settings["voice_model"], scale=6)
+                    refresh_models_available_button = gr.Button(
+                        value="Refresh Models Available", scale=1)
+                unload_all_models_button = gr.Button(
+                        value="Unload all loaded models")    
                 
                 def update_models():
                     list_of_models = get_voice_models()
@@ -838,6 +1216,8 @@ def main():
                 refresh_models_available_button.click(fn=update_models,
                                                       outputs=GENERATE_SETTINGS["voice_model"]
                 )
+                
+                unload_all_models_button.click(fn=unload_all_models)
                 
                 GENERATE_SETTINGS["voice_model"].change(fn=update_voice_model,
                                 inputs=[GENERATE_SETTINGS["voice_model"]])
@@ -870,5 +1250,7 @@ def main():
     webbrowser.open(f"http://localhost:{webui_port}")
     demo.launch(server_name="0.0.0.0", server_port=webui_port)
 
+
+    
 if __name__ == "__main__":
     main()
