@@ -35,6 +35,8 @@ import webbrowser
 import socket
 import numpy as np
 from scipy.io.wavfile import write
+from pydub import AudioSegment
+from io import BytesIO
 
 from styletts2.utils import *
 from modules.tortoise_dataset_tools.dataset_whisper_tools.dataset_maker_large_files import *
@@ -229,10 +231,11 @@ def generate_audiobook_audio(text, voice, reference_audio_file, seed, alpha, bet
     original_seed = int(seed)
 
     fragmentDirectory = os.path.join(chapters_directory, 'fragments')
+
     os.makedirs(fragmentDirectory, exist_ok=True)
     i = 0
 
-    print(text)
+    # print(text)
 
     for t in text:
         beta = originalBeta
@@ -269,8 +272,16 @@ def generate_audiobook_audio(text, voice, reference_audio_file, seed, alpha, bet
             rtf = (time.time() - start)
             # print(f"RTF = {rtf:5f}")
 
-            
             write(os.path.join(fragmentDirectory, f'{i}.wav'), 24000, np.concatenate(audios))
+            # audio_chapter = AudioSegment.from_wav(os.path.join(fragmentDirectory, f'{i}.wav'))
+            # file_handle = audio_chapter.export(os.path.join(fragmentDirectory, f'{i}.mp3'),
+            #                format="mp3",
+            #                bitrate="320k")
+            # print(f'saved {file_handle}')
+
+            
+
+            
             i += 1
     
     audio_opt_dir = os.path.dirname(audio_opt_path)
@@ -1074,10 +1085,7 @@ def main():
                     from cleantext import clean
                     for chapter_file in sorted(os.listdir(chapters_directory)):
                         if chapter_file.endswith('.txt'):
-                            print(os.path.join(chapters_directory, "audio", chapter_file.replace(".txt", ".wav")))
-                            print(f'{chapters_directory}/audio_{chapter_file.replace(".txt", ".wav")}')
-                            if os.path.isfile(os.path.join(chapters_directory, "audio", chapter_file.replace(".txt", ".wav"))): # don't regenerate a chapter that exists
-                                print(f'{chapter_file.replace(".txt", ".wav")} already created, skipping epub conversion.')
+                            if os.path.isfile(os.path.join(chapters_directory, f'audio_{chapter_file.replace(".txt", ".mp3")}')): # don't regenerate a chapter that exists
                                 continue
                             else:
                                 match = re.search(r"chapter_(\d+).txt", chapter_file)
@@ -1091,16 +1099,11 @@ def main():
                                 chapter_path = os.path.join(chapters_directory, chapter_file)
                                 output_file_name = f"audio_chapter_{chapter_num}.wav"
                                 output_file_path = os.path.join(output_audio_directory, output_file_name)
-                                output_file_combined_path = os.path.join(chapters_directory, 'combined.wav')
-                                tokenizedChapterText = ''
 
                                 with open(chapter_path, 'r', encoding='utf-8') as file:
-                                    # chapter_text = file.read()
                                     chapter_text = re.sub("[^{}]+".format(printable), "", file.read())
-                                    # sentences = sent_tokenize(chapter_text, language='english')
-                                    # for sentence in tqdm(sentences, desc=f"Chapter {chapter_num}"):
-                                    #     tokenizedChapterText += sentence
                                     
+                                # pre-clean text for better split_and_combine
                                 chapter_text = clean(chapter_text,
                                     fix_unicode=True,               # fix various unicode errors
                                     to_ascii=True,                  # transliterate to closest ASCII representation
@@ -1125,6 +1128,7 @@ def main():
 
                                 # Idea: split out quoted strings so they can easily be targeted to use a different
                                 # target voice file, making it easier to understand while listening.
+                                #  - this is done!
                                 import shlex
 
                                 # use shlex to split string out to separate out quotes being made
@@ -1148,7 +1152,8 @@ def main():
                                         unquotedElement = ''
                                 if len(unquotedElement) > 0:
                                     textlist.append(unquotedElement.lstrip()) # woops
-                                    
+
+                                # finally, get to the goods.                                    
                                 generate_audiobook_audio( 
                                     textlist,
                                     voice, 

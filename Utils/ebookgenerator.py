@@ -66,26 +66,27 @@ def create_m4b_from_chapters(input_dir, ebook_file, output_dir):
         except Exception as e:
             print(f"Error extracting eBook metadata or cover: {e}")
         return None
-    # Combine WAV files into a single file
-    def combine_wav_files(chapter_files, output_path):
+    # Combine mp3 files into a single file
+    def combine_mp3_files(chapter_files, output_path):
         # Initialize an empty audio segment
         combined_audio = AudioSegment.empty()
 
         # Sequentially append each file to the combined_audio
         for chapter_file in chapter_files:
-            audio_segment = AudioSegment.from_wav(chapter_file)
+            print(f'Chapter file: {chapter_file}')
+            audio_segment = AudioSegment.from_mp3(chapter_file)
             combined_audio += audio_segment
         # Export the combined audio to the output file path
-        combined_audio.export(output_path, format='wav')
+        combined_audio.export(output_path, format="mp3", bitrate="192k")
         print(f"Combined audio saved to {output_path}")
-
+    
     # Function to generate metadata for M4B chapters
     def generate_ffmpeg_metadata(chapter_files, metadata_file):
         with open(metadata_file, 'w') as file:
             file.write(';FFMETADATA1\n')
             start_time = 0
             for index, chapter_file in enumerate(chapter_files):
-                duration_ms = len(AudioSegment.from_wav(chapter_file))
+                duration_ms = len(AudioSegment.from_mp3(chapter_file))
                 file.write(f'[CHAPTER]\nTIMEBASE=1/1000\nSTART={start_time}\n')
                 file.write(f'END={start_time + duration_ms}\ntitle=Chapter {index + 1}\n')
                 start_time += duration_ms
@@ -111,14 +112,14 @@ def create_m4b_from_chapters(input_dir, ebook_file, output_dir):
 
 
     # Main logic
-    chapter_files = sorted([os.path.join(input_dir, f) for f in os.listdir(input_dir) if f.endswith('.wav')], key=sort_key)
+    chapter_files = sorted([os.path.join(input_dir, f) for f in os.listdir(input_dir) if f.endswith('.mp3')], key=sort_key)
     temp_dir = os.path.join(".", "audiobooks", "working", "temp_ebook", "combined")
-    temp_combined_wav = os.path.join(temp_dir, 'combined.wav')
+    temp_combined_wav = os.path.join(temp_dir, 'combined.mp3')
     metadata_file = os.path.join(temp_dir, 'metadata.txt')
     cover_image = extract_metadata_and_cover(ebook_file)
     output_m4b = os.path.join(output_dir, os.path.splitext(os.path.basename(ebook_file))[0] + '.m4b')
 
-    combine_wav_files(chapter_files, temp_combined_wav)
+    combine_mp3_files(chapter_files, temp_combined_wav)
     generate_ffmpeg_metadata(chapter_files, metadata_file)
     create_m4b(temp_combined_wav, metadata_file, cover_image, output_m4b)
 
@@ -156,11 +157,6 @@ def create_chapter_labeled_book(ebook_file_path):
         directory = os.path.join(".", "audiobooks", "working", "temp_ebook")
         ensure_directory(directory)
 
-        # remove existing chapter txt files - processing time is trivial to recreate.
-        for item in os.listdir(directory):
-            if item.endswith(".txt"):
-                os.remove(os.path.join(directory, item))
-
         # Open the EPUB file
         book = epub.read_epub(epub_path)
 
@@ -174,53 +170,55 @@ def create_chapter_labeled_book(ebook_file_path):
         # Iterate through the items in the EPUB file
         for item in book.get_items():
             if item.get_type() == ebooklib.ITEM_DOCUMENT:
-                # Use BeautifulSoup to parse HTML content
-                soup = BeautifulSoup(item.get_content(), 'html.parser')
-                text = soup.get_text()
 
-                from cleantext import clean
-                text = clean(text,
-                    fix_unicode=True,               # fix various unicode errors
-                    to_ascii=True,                  # transliterate to closest ASCII representation
-                    lower=False,                     # lowercase text
-                    no_line_breaks=True,           # fully strip line breaks as opposed to only normalizing them
-                    no_urls=False,                  # replace all URLs with a special token
-                    no_emails=False,                # replace all email addresses with a special token
-                    no_phone_numbers=False,         # replace all phone numbers with a special token
-                    no_numbers=False,               # replace all numbers with a special token
-                    no_digits=False,                # replace all digits with a special token
-                    no_currency_symbols=False,      # replace all currency symbols with a special token
-                    no_punct=False,                 # remove punctuations
-                    replace_with_punct="",          # instead of removing punctuations you may replace them
-                    replace_with_url="<URL>",
-                    replace_with_email="<EMAIL>",
-                    replace_with_phone_number="<PHONE>",
-                    replace_with_number="<NUMBER>",
-                    replace_with_digit="0",
-                    replace_with_currency_symbol="<CUR>",
-                    lang="en"                       # set to 'de' for German special handling
-                )
-                
-                if text.strip():
-                    if len(text) < 2300 and previous_filename:
-                        # Append text to the previous chapter if it's short
-                        # chapterTexts[chapter_counter] = f'{chapterTexts[chapter_counter]}\n{text}'
-                        with open(previous_filename, 'a', encoding='utf-8') as filetext:
-                            filetext.write('\n' + text)
-                    else:
-                        # Create a new chapter file and increment the counter
-                        # chapterTexts[chapter_counter] = text
-                        previous_filename = os.path.join(directory, f"chapter_{chapter_counter}.txt")
-                        chapter_counter += 1
-                        with open(previous_filename, 'w', encoding='utf-8') as filetext:
-                            filetext.write(text)
-                            print(f"Saved chapter: {previous_filename}")
+                # don't regenerate existing chapter files
+                if os.path.isfile(os.path.join(directory, f"chapter_{chapter_counter}.txt")):
+                    print(f'chapter_{chapter_counter}.txt already exists, skipping')
+                    continue
+                else:
+                    # Use BeautifulSoup to parse HTML content
+                    soup = BeautifulSoup(item.get_content(), 'html.parser')
+                    text = soup.get_text()
 
-                        
+                    from cleantext import clean
+                    text = clean(text,
+                        fix_unicode=True,               # fix various unicode errors
+                        to_ascii=True,                  # transliterate to closest ASCII representation
+                        lower=False,                     # lowercase text
+                        no_line_breaks=True,           # fully strip line breaks as opposed to only normalizing them
+                        no_urls=False,                  # replace all URLs with a special token
+                        no_emails=False,                # replace all email addresses with a special token
+                        no_phone_numbers=False,         # replace all phone numbers with a special token
+                        no_numbers=False,               # replace all numbers with a special token
+                        no_digits=False,                # replace all digits with a special token
+                        no_currency_symbols=False,      # replace all currency symbols with a special token
+                        no_punct=False,                 # remove punctuations
+                        replace_with_punct="",          # instead of removing punctuations you may replace them
+                        replace_with_url="<URL>",
+                        replace_with_email="<EMAIL>",
+                        replace_with_phone_number="<PHONE>",
+                        replace_with_number="<NUMBER>",
+                        replace_with_digit="0",
+                        replace_with_currency_symbol="<CUR>",
+                        lang="en"                       # set to 'de' for German special handling
+                    )
                     
+                    if text.strip():
+                        if len(text) < 2300 and previous_filename:
+                            # Append text to the previous chapter if it's short
+                            # chapterTexts[chapter_counter] = f'{chapterTexts[chapter_counter]}\n{text}'
+                            with open(previous_filename, 'a', encoding='utf-8') as filetext:
+                                filetext.write('\n' + text)
+                        else:
+                            # Create a new chapter file and increment the counter
+                            # chapterTexts[chapter_counter] = text
+                            previous_filename = os.path.join(directory, f"chapter_{chapter_counter}.txt")
+                            chapter_counter += 1
+                            with open(previous_filename, 'w', encoding='utf-8') as filetext:
+                                filetext.write(text)
+                                print(f"Saved chapter: {previous_filename}")
 
-    # Example usage
-    input_ebook = ebook_file_path  # Replace with your eBook file path
+    input_ebook = ebook_file_path 
     output_epub = os.path.join(".", "audiobooks", "working", "temp.epub")
 
 
@@ -307,6 +305,7 @@ def combine_wav_files(input_directory, output_directory, file_name):
 
     # Specify the output file path
     output_file_path = os.path.join(output_directory, file_name)
+    output_mp3_path = os.path.join(output_directory,f'{os.path.splitext(os.path.basename(output_file_path))[0]}.mp3')
 
     # Initialize an empty audio segment
     combined_audio = AudioSegment.empty()
@@ -323,7 +322,33 @@ def combine_wav_files(input_directory, output_directory, file_name):
         combined_audio += audio_segment
 
     # Export the combined audio to the output file path
-    combined_audio.export(output_file_path, format='wav')
+    combined_audio.export(output_mp3_path, format="mp3", bitrate="320k")
+
+    print(f"Combined audio saved to {output_file_path}")
+
+def combine_mp3_files(input_directory, output_directory, file_name):
+    # Ensure that the output directory exists, create it if necessary
+    os.makedirs(output_directory, exist_ok=True)
+
+    # Specify the output file path
+    output_file_path = os.path.join(output_directory, file_name)
+
+    # Initialize an empty audio segment
+    combined_audio = AudioSegment.empty()
+
+    # Get a list of all .wav files in the specified input directory and sort them
+    input_file_paths = sorted(
+        [os.path.join(input_directory, f) for f in os.listdir(input_directory) if f.endswith(".mp3")],
+        key=lambda f: int(''.join(filter(str.isdigit, f)))
+    )
+
+    # Sequentially append each file to the combined_audio
+    for input_file_path in input_file_paths:
+        audio_segment = AudioSegment.from_mp3(input_file_path)
+        combined_audio += audio_segment
+
+    # Export the combined audio to the output file path
+    combined_audio.export(output_file_path, format='mp3', bitrate="320k")
 
     print(f"Combined audio saved to {output_file_path}")
 
