@@ -75,6 +75,7 @@ def create_m4b_from_chapters(input_dir, ebook_file, output_dir):
         for chapter_file in chapter_files:
             print(f'Chapter file: {chapter_file}')
             audio_segment = AudioSegment.from_mp3(chapter_file)
+            audio_segment + 6 # boost volume a bit - will need to make user-facing option eventually.
             combined_audio += audio_segment
         # Export the combined audio to the output file path
         combined_audio.export(output_path, format="mp3", bitrate="192k")
@@ -114,22 +115,26 @@ def create_m4b_from_chapters(input_dir, ebook_file, output_dir):
     # Main logic
     chapter_files = sorted([os.path.join(input_dir, f) for f in os.listdir(input_dir) if f.endswith('.mp3')], key=sort_key)
     temp_dir = os.path.join(".", "audiobooks", "working", "temp_ebook", "combined")
-    temp_combined_wav = os.path.join(temp_dir, 'combined.mp3')
+    temp_combined_mp3 = os.path.join(temp_dir, 'combined.mp3')
     metadata_file = os.path.join(temp_dir, 'metadata.txt')
     cover_image = extract_metadata_and_cover(ebook_file)
     output_m4b = os.path.join(output_dir, os.path.splitext(os.path.basename(ebook_file))[0] + '.m4b')
 
-    combine_mp3_files(chapter_files, temp_combined_wav)
-    generate_ffmpeg_metadata(chapter_files, metadata_file)
-    create_m4b(temp_combined_wav, metadata_file, cover_image, output_m4b)
+    # only try to combine the chapters if the temp combined file doesn't exist. Trivial check, mostly for debugging
+    if not os.path.isfile(temp_combined_mp3): combine_mp3_files(chapter_files, temp_combined_mp3)
+
+    # only generate metadata and convert to m4b if it doesn't exist yet. Also a trivial check.
+    if not os.path.isfile(output_m4b):
+        generate_ffmpeg_metadata(chapter_files, metadata_file)
+        create_m4b(temp_combined_mp3, metadata_file, cover_image, output_m4b)
 
     # Cleanup
-    if os.path.exists(temp_combined_wav):
-        os.remove(temp_combined_wav)
-    if os.path.exists(metadata_file):
-        os.remove(metadata_file)
-    if cover_image and os.path.exists(cover_image):
-        os.remove(cover_image)
+    # if os.path.exists(temp_combined_mp3):
+    #     os.remove(temp_combined_mp3)
+    # if os.path.exists(metadata_file):
+    #     os.remove(metadata_file)
+    # if cover_image and os.path.exists(cover_image):
+    #     os.remove(cover_image)
 
 def create_chapter_labeled_book(ebook_file_path):
     # Function to ensure the existence of a directory
@@ -319,6 +324,7 @@ def combine_wav_files(input_directory, output_directory, file_name):
     # Sequentially append each file to the combined_audio
     for input_file_path in input_file_paths:
         audio_segment = AudioSegment.from_wav(input_file_path)
+        audio_segment = audio_segment + 2 # make it a bit louder
         combined_audio += audio_segment
 
     # Export the combined audio to the output file path
