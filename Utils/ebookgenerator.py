@@ -170,8 +170,6 @@ def create_chapter_labeled_book(ebook_file_path):
         chapter_counter = 0
         chapterTexts = {}
 
-        from string import printable
-
         # Iterate through the items in the EPUB file
         for item in book.get_items():
             if item.get_type() == ebooklib.ITEM_DOCUMENT:
@@ -369,3 +367,276 @@ def list_audiobook_files(audiobook_folder):
 def download_audiobooks():
     audiobook_output_path = os.path.join(".", "audiobooks")
     return list_audiobook_files(audiobook_output_path)
+
+
+
+import gradio as gr
+import random
+from webui import *
+
+def preprocessChapterText(text):
+    global global_phonemizer, model, model_params, sampler, textcleaner, to_mel, params_whole
+    
+    tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
+    inferenceTexts = []
+
+    inferences = {}
+    inferencesIter = 0
+    
+    # break apart into sentences
+    for t in text:
+        if re.search(r'[a-zA-Z]+', t) or re.search(r'[0-9]+', t):
+            if t.startswith("\"") and t.endswith("\""): # don't tokenize quotes
+                inferences[inferencesIter] = {'text':'','isQuote':True,'deleteRecord':False}
+                t = t.replace("\"", "")
+                inferences[inferencesIter]['text'] = f'\"Quote, {t}, Endquote.\"'
+                inferencesIter += 1
+            else:
+                for t2 in tokenizer.tokenize(t):
+                    inferences[inferencesIter] = {'text':'','isQuote':False,'deleteRecord':False}
+                    inferences[inferencesIter]['text'] = f'{t2}.' if not t2.endswith(".") else t2
+                    inferencesIter += 1
+
+    # for i in inferences:
+    #     print(inferences[i]['text'])
+
+    dictRecordDeleteCount = 0
+    keyCount = len(inferences)-1
+
+    print(keyCount)
+
+    if len(inferences) > 1:
+        for i in inferences:
+            if inferences[i]['deleteRecord']: # account for the shifted records to remove at end
+                break
+            if len(inferences[i]['text']) > 20:
+                continue
+            else:
+                while len(inferences[i]['text']) <= 20 and not inferences[i]['deleteRecord']:
+                    # print(f'too short:')
+                    if i == 0: # then it doesn't really matter whether or not the next record is/isn't a quote, it can only append there.
+                        # print(f'Was {inferences[i]['text']}')
+                        inferences[i]['text'] = f'{inferences[i]["text"]} {inferences[i+1]["text"]}'.replace("\"", "") # attach short text to next item
+                        # print(f'  now: {inferences[i]['text']}')
+                        for i2 in inferences: 
+                            if i2 >= i+1 and i2+1 <= keyCount: # adjust keys of remaining dict
+                                inferences[i2] = inferences[i2+1]
+                        inferences[keyCount-dictRecordDeleteCount]['deleteRecord'],inferences[keyCount-dictRecordDeleteCount]['text'] = True,'delete this record'
+                        dictRecordDeleteCount += 1
+                                # del inferences[keyCount]
+                    else:
+                        if i == keyCount - dictRecordDeleteCount: # Then this is the last record in the dict that needs to be reviewed, so it has to append to the previous record.
+                            inferences[i-1]['text'] = f'{inferences[i-1]["text"]} {inferences[i]["text"]}'.replace("\"", "") # attach short text to next item
+                            for i2 in inferences: 
+                                if i2 >= i+1 and i2+1 <= keyCount: # adjust keys of remaining dict
+                                    inferences[i2] = inferences[i2+1]
+                            inferences[keyCount-dictRecordDeleteCount]['deleteRecord'],inferences[keyCount-dictRecordDeleteCount]['text'] = True,'delete this record'
+                            dictRecordDeleteCount += 1
+                            # del inferences[keyCount]
+                        else:
+                            if inferences[i]['isQuote']:
+                                if inferences[i-1]['isQuote'] or i+1 not in inferences.keys():
+                                    inferences[i-1]['text'] = f'{inferences[i-1]["text"][:-12]}. {inferences[i]["text"][8:]}'
+                                    for i2 in inferences: 
+                                        if i2 >= i and i2+1 <= keyCount: # adjust keys of remaining dict
+                                            inferences[i2] = inferences[i2+1]
+                                    inferences[keyCount-dictRecordDeleteCount]['deleteRecord'],inferences[keyCount-dictRecordDeleteCount]['text'] = True,'delete this record'
+                                    dictRecordDeleteCount += 1
+                                            # del inferences[keyCount]
+                                else:
+                                    inferences[i]['text'] = f'{inferences[i]["text"]} {inferences[i+1]["text"]}'.replace("\"", "")
+                                    for i2 in inferences: 
+                                        if i2 > i and i2+1 <= keyCount: # adjust keys of remaining dict
+                                            inferences[i2] = inferences[i2+1]
+                                    inferences[keyCount-dictRecordDeleteCount]['deleteRecord'],inferences[keyCount-dictRecordDeleteCount]['text'] = True,'delete this record'
+                                    dictRecordDeleteCount += 1
+                                            # del inferences[keyCount]
+                            else:
+                                if (not inferences[i-1]['isQuote'] or i+1 not in inferences.keys()):
+                                    inferences[i-1]['text'] = f'{inferences[i-1]["text"]} {inferences[i]["text"]}'
+                                    for i2 in inferences: 
+                                        if i2 >= i and i2+1 <= keyCount : # adjust keys of remaining dict
+                                            inferences[i2] = inferences[i2+1]
+                                    inferences[keyCount-dictRecordDeleteCount]['deleteRecord'],inferences[keyCount-dictRecordDeleteCount]['text'] = True,'delete this record'
+                                    dictRecordDeleteCount += 1
+                                            # del inferences[keyCount]
+                                else:
+                                    inferences[i]['text'] = f'{inferences[i]["text"]} {inferences[i+1]["text"]}'.replace("\"", "")
+                                    for i2 in inferences: 
+                                        if i2 > i and i2+1 <= keyCount: # adjust keys of remaining dict
+                                            inferences[i2] = inferences[i2+1]
+                                    inferences[keyCount-dictRecordDeleteCount]['deleteRecord'],inferences[keyCount-dictRecordDeleteCount]['text'] = True,'delete this record'
+                                    dictRecordDeleteCount += 1
+                                        # del inferences[keyCount]
+
+    while dictRecordDeleteCount > 0:
+        keyCount = len(inferences)-1
+        del inferences[keyCount]
+        dictRecordDeleteCount -= 1
+
+    for i in inferences:
+        if not inferences[i]['deleteRecord']:
+            inferenceTexts.append(inferences[i]['text'])
+
+    return(inferenceTexts)
+
+
+def convert_ebook_to_audio(ebook_file, progress=gr.Progress()):
+    currentSettings = load_settings()
+    ebook_file_path = ebook_file.name
+
+    if currentSettings["seed"]==-1: # ensure consistent seed across full audiobook
+        seed_value = random.randint(0, 2**32 - 1)
+    else:
+        seed_value = currentSettings["seed"]
+
+    workingDir = chapter_text = re.sub('[^a-zA-Z0-9\n\.]', '', os.path.splitext(os.path.basename(ebook_file_path))[0])
+
+    # working = os.path.join(".", "working", "temp_ebook")
+    full_folder_working = os.path.join(".", "audiobooks", "working")
+    chapters_directory = os.path.join(".", "audiobooks",  "working", "temp_ebook")
+    output_audio_directory = os.path.join(".", "audiobooks",  "working", "temp_ebook")
+    output_audio_directory_combined = os.path.join(".", "audiobooks",  "working", "temp_ebook", "combined")
+    chapterIter = 0
+    # remove_folder_with_contents(full_folder_working)
+    # remove_folder_with_contents(output_audio_directory)
+    os.makedirs(chapters_directory, exist_ok=True)
+    os.makedirs(output_audio_directory, exist_ok=True)
+    os.makedirs(output_audio_directory_combined, exist_ok=True)
+
+    try:
+        progress(0, desc="Starting conversion")
+    except Exception as e:
+        print(f"Error updating progress: {e}")
+
+    try: # Check that calibre is installed
+        subprocess.run(['ebook-convert', '--version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except FileNotFoundError:
+        print("Calibre is not installed. Please install Calibre for this functionality.")
+    
+    try:
+        progress(0.1, desc="Creating chapter-labeled book")
+    except Exception as e:
+        print(f"Error updating progress: {e}")
+    
+    create_chapter_labeled_book(ebook_file_path)
+    audiobook_output_path = os.path.join(".", "audiobooks")
+    
+    try:
+        progress(0.3, desc="Converting chapters to audio")
+    except Exception as e:
+        print(f"Error updating progress: {e}")
+
+    # convert each chapter into generated audio
+
+    from string import printable
+    from cleantext import clean
+    for chapter_file in sorted(os.listdir(chapters_directory)):
+        if chapter_file.endswith('.txt'):
+            if os.path.isfile(os.path.join(chapters_directory, f'audio_{chapter_file.replace(".txt", ".mp3")}')): # don't regenerate a chapter that exists
+                continue
+            else:
+                match = re.search(r"chapter_(\d+).txt", chapter_file)
+                if match:
+                    chapter_num = int(match.group(1))
+                else:
+                    print(f"Skipping file {chapter_file} as it does not match the expected format.")
+                    continue
+                print(f'Narrating Chapter {chapter_num}')
+
+                chapter_path = os.path.join(chapters_directory, chapter_file)
+                output_file_name = f"audio_chapter_{chapter_num}.wav"
+                output_file_path = os.path.join(output_audio_directory, output_file_name)
+
+                with open(chapter_path, 'r', encoding='utf-8') as file:
+                    chapter_text = re.sub("[^{}]+".format(printable), "", file.read())
+                    
+                # pre-clean text for better split_and_combine
+                chapter_text = clean(chapter_text,
+                    fix_unicode=True,               # fix various unicode errors
+                    to_ascii=True,                  # transliterate to closest ASCII representation
+                    lower=False,                     # lowercase text
+                    no_line_breaks=True,           # fully strip line breaks as opposed to only normalizing them
+                    no_urls=False,                  # replace all URLs with a special token
+                    no_emails=False,                # replace all email addresses with a special token
+                    no_phone_numbers=False,         # replace all phone numbers with a special token
+                    no_numbers=False,               # replace all numbers with a special token
+                    no_digits=False,                # replace all digits with a special token
+                    no_currency_symbols=False,      # replace all currency symbols with a special token
+                    no_punct=False,                 # remove punctuations
+                    replace_with_punct="",          # instead of removing punctuations you may replace them
+                    replace_with_url="<URL>",
+                    replace_with_email="<EMAIL>",
+                    replace_with_phone_number="<PHONE>",
+                    replace_with_number="<NUMBER>",
+                    replace_with_digit="0",
+                    replace_with_currency_symbol="<CUR>",
+                    lang="en"                       # set to 'de' for German special handling
+                )
+
+                chapter_text = chapter_text.replace("--", ", ")
+
+                # Idea: split out quoted strings so they can easily be targeted to use a different
+                # target voice file, making it easier to understand while listening.
+                #  - this is done!
+                import shlex
+
+                # use shlex to split string out to separate out quotes being made
+                chaptertext = shlex.split(chapter_text, posix=False)
+
+                # since everything that isn't a quote is split word-by-word, fix that
+                textlist = []
+                unquotedElement = ''
+
+                for t in chaptertext:
+                    # if the element isn't a quote, keep concatenating to rebuild the sentence.
+                    if not t.startswith("\"") and not t.endswith("\""):
+                        unquotedElement = f'{unquotedElement} {t}'
+                        # print(unquotedElement)
+                    else:
+                        # once it hits a quote, add the whole concatenated var as an element to a new list, then the whole quote as another
+                        if len(unquotedElement) > 0: # only append if there's something there. Fixes issues with ['"whats up?"','"nothing."'] for example
+                            textlist.append(unquotedElement.lstrip())
+                        textlist.append(t)
+                        # wipe the concatenated var to start anew
+                        unquotedElement = ''
+                if len(unquotedElement) > 0:
+                    textlist.append(unquotedElement.lstrip()) # woops\
+
+                # finally, get to the goods.                                    
+                generate_audiobook_audio( 
+                    textlist,
+                    currentSettings["voice"], 
+                    currentSettings["reference_audio_file"], 
+                    seed_value, 
+                    currentSettings["alpha"], 
+                    currentSettings["beta"], 
+                    currentSettings["diffusion_steps"], 
+                    currentSettings["embedding_scale"], 
+                    chapters_directory,
+                    progress,
+                    chapterIter,
+                    output_file_path)
+                    
+                
+        chapterIter+=1
+                
+    print(f"All chapters converted to audio ")
+
+    try:
+        progress(0.9, desc="Creating M4B from chapters")
+    except Exception as e:
+        print(f"Error updating progress: {e}")
+    
+    create_m4b_from_chapters(output_audio_directory, ebook_file_path, audiobook_output_path)
+    
+    # Get the name of the created M4B file
+    m4b_filename = os.path.splitext(os.path.basename(ebook_file_path))[0] + '.m4b'
+    m4b_filepath = os.path.join(audiobook_output_path, m4b_filename)
+
+    try:
+        progress(1.0, desc="Conversion complete")
+    except Exception as e:
+        print(f"Error updating progress: {e}")
+    print(f"Audiobook created at {m4b_filepath}")
+    return f"Audiobook created at {m4b_filepath}", m4b_filepath
