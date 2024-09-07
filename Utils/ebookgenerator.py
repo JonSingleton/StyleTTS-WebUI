@@ -11,6 +11,7 @@ import ebooklib
 from ebooklib import epub
 from bs4 import BeautifulSoup
 import csv
+import num2words
 
 def is_folder_empty(folder_path):
     if os.path.exists(folder_path) and os.path.isdir(folder_path):
@@ -382,6 +383,8 @@ def preprocessChapterText(text):
 
     inferences = {}
     inferencesIter = 0
+ 
+    chapterText = '' # scrapping this whole quote-different-sounding-nonsense.
     
     # break apart into sentences
     for t in text:
@@ -389,13 +392,18 @@ def preprocessChapterText(text):
             if t.startswith("\"") and t.endswith("\""): # don't tokenize quotes
                 inferences[inferencesIter] = {'text':'','isQuote':True,'deleteRecord':False}
                 t = t.replace("\"", "")
-                inferences[inferencesIter]['text'] = f'\"Quote, {t}, Endquote.\"'
+                inferences[inferencesIter]['text'] = f'Quote, {t}, Endquote.'
                 inferencesIter += 1
             else:
                 for t2 in tokenizer.tokenize(t):
                     inferences[inferencesIter] = {'text':'','isQuote':False,'deleteRecord':False}
                     inferences[inferencesIter]['text'] = f'{t2}.' if not t2.endswith(".") else t2
                     inferencesIter += 1
+
+    for t in text:
+        chapterText = f'{chapterText} {t}'
+
+    return t
 
     # for i in inferences:
     #     print(inferences[i]['text'])
@@ -482,6 +490,7 @@ def preprocessChapterText(text):
 
 
 def convert_ebook_to_audio(ebook_file, progress=gr.Progress()):
+    global model, to_mel
     currentSettings = load_settings()
     ebook_file_path = ebook_file.name
 
@@ -489,6 +498,7 @@ def convert_ebook_to_audio(ebook_file, progress=gr.Progress()):
         seed_value = random.randint(0, 2**32 - 1)
     else:
         seed_value = currentSettings["seed"]
+    set_seeds(seed_value)
 
     workingDir = chapter_text = re.sub('[^a-zA-Z0-9\n\.]', '', os.path.splitext(os.path.basename(ebook_file_path))[0])
 
@@ -528,7 +538,6 @@ def convert_ebook_to_audio(ebook_file, progress=gr.Progress()):
         print(f"Error updating progress: {e}")
 
     # convert each chapter into generated audio
-
     from string import printable
     from cleantext import clean
     for chapter_file in sorted(os.listdir(chapters_directory)):
@@ -603,9 +612,19 @@ def convert_ebook_to_audio(ebook_file, progress=gr.Progress()):
                 if len(unquotedElement) > 0:
                     textlist.append(unquotedElement.lstrip()) # woops\
 
+                inferences = []
+                chapterText = '' # scrapping this whole quote-different-sounding-nonsense.
+
+                for t in textlist:
+                    if re.search(r'[a-zA-Z]+', t) or re.search(r'[0-9]+', t):
+                        chapterText = f'{chapterText} Quote, {t}, Endquote.' if t.startswith("\"") and t.endswith("\"") else f'{chapterText} {t}'.replace("\"", "")
+
+                # hopefully fix issues with expanded tensor sizes going over 512 by expanding numbers to full words in text
+                chapterText = re.sub(r"(\d+)", lambda x: num2words.num2words(int(x.group(0))), chapterText)
+
                 # finally, get to the goods.                                    
                 generate_audiobook_audio( 
-                    textlist,
+                    chapterText,
                     currentSettings["voice"], 
                     currentSettings["reference_audio_file"], 
                     seed_value, 
@@ -613,7 +632,6 @@ def convert_ebook_to_audio(ebook_file, progress=gr.Progress()):
                     currentSettings["beta"], 
                     currentSettings["diffusion_steps"], 
                     currentSettings["embedding_scale"], 
-                    chapters_directory,
                     progress,
                     chapterIter,
                     output_file_path)
@@ -639,4 +657,4 @@ def convert_ebook_to_audio(ebook_file, progress=gr.Progress()):
     except Exception as e:
         print(f"Error updating progress: {e}")
     print(f"Audiobook created at {m4b_filepath}")
-    return f"Audiobook created at {m4b_filepath}", m4b_filepath
+    return f"Audiobook created at {m4b_filepath}"

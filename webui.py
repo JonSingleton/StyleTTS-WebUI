@@ -169,146 +169,92 @@ def load_voice_model(voice):
     return get_file_path(root_path="models", voice=voice, file_extension=".pth", error_message="No TTS model found in specified location")
 
 
-def generate_audiobook_audio(text, voice, reference_audio_file, seed, alpha, beta, diffusion_steps, embedding_scale, chapters_directory, progress, chapterIter, audio_opt_path=None, voices_root="voices",):
+def generate_audiobook_audio(text, voice, reference_audio_file, seed, alpha, beta, diffusion_steps, embedding_scale, progress, chapterIter, audio_opt_path=None,):
     global global_phonemizer, model, model_params, sampler, textcleaner, to_mel, params_whole, loaded
+    
     if not loaded:
         update_voice_model(load_settings()["voice_model"])
         loaded = True
-    # At a place where it no longer makes sense to make generate_audio differentiate between user prompts and ebook generation.
-    # Splitting them out to implement a method of using separate audio generation configurations for when a quote is being read 
-    # to make it easier to differentiate when listening.
-    from Utils.ebookgenerator import combine_wav_files, remove_folder_with_contents,preprocessChapterText
-    original_seed = int(seed)
-    partCount = 1
 
-    text = preprocessChapterText(text)
+    audios = []
 
-    partTotal = len(text)
+    print(f'seed: {seed}')
 
-    fragmentDirectory = os.path.join(chapters_directory, 'fragments')
-    os.makedirs(fragmentDirectory, exist_ok=True)
-    
-    reference_audio_path = os.path.join(voices_root, voice, reference_audio_file)
+    start = time.time()
+    texts = split_and_recombine_text(text)
+
+    reference_audio_path = os.path.join("voices", voice, reference_audio_file)
     reference_dicts = {f'{voice}': f"{reference_audio_path}"}
 
     for k, path in reference_dicts.items():
         mean, std = -4, 4
         ref_s = compute_style(path, model, to_mel, mean, std, device)
-    audios = []
-    for t in text:
-        if os.path.isfile(os.path.join(fragmentDirectory, f'{partCount-1}.wav')): # don't regenerate fragments that exist.
-            continue
-        else:
+    
+    inferenceSettings = {}
+    splitIters = 0
+    for st in texts:
+        inferenceSettings[splitIters] = {'text':''}
+        inferenceSettings[splitIters]['text'] = st
+        # try to deal with nasty issue of having sentences that are too short to generate anything but static.
+        splitIters += 1
+        
+    # audios = []
+    fragmentCount = 1
+    fragmentTotal = len(inferenceSettings)
+
+    combined_audio = AudioSegment.empty()
+
+    for fragment in inferenceSettings:
+
+        t = inferenceSettings[fragment]['text']
+
+        try:
+            progress(0.5, desc=f'Inferencing Chapter: {chapterIter}, fragment: {fragmentCount}/{fragmentTotal}')
+        except Exception as e:
+            print(f"Error updating progress: {e}")
+        fragmentCount += 1
+        
+        try:
+            bytes_wav = bytes()
+            byte_io = BytesIO(bytes_wav)
+            # bytes_wav.seek(0)
+            write(byte_io, 24000, inference(
+                                t, 
+                                ref_s, 
+                                model, 
+                                sampler, 
+                                textcleaner, 
+                                to_mel, 
+                                device, 
+                                model_params, 
+                                global_phonemizer=global_phonemizer, 
+                                alpha=alpha, 
+                                beta=beta, 
+                                diffusion_steps=diffusion_steps, 
+                                embedding_scale=embedding_scale))
             
-            start = time.time()
-            if original_seed==-1:
-                seed_value = random.randint(0, 2**32 - 1)
-            else:
-                seed_value = original_seed
-            set_seeds(seed_value)
-            # If any sentences are too long after being tokenized, this will split them over multiple inferences. 
-            texts = split_and_recombine_text(t)
-            
-            inferenceSettings = {}
-            splitIters = 0
-            for st in texts:
-                inferenceSettings[splitIters] = {'text':'','quote':False,'beta':beta,'alpha':alpha,'quoteType':'','embedding_scale':embedding_scale}
-                inferenceSettings[splitIters]['text'] = st
-                # try to deal with nasty issue of having sentences that are too short to generate anything but static.
-                if len(st) < 15 and embedding_scale > 2.6:
-                    inferenceSettings[splitIters]['embedding_scale'] = 2.6
-                if len(st) <= 10 and embedding_scale > 2:
-                    inferenceSettings[splitIters]['embedding_scale'] = 2
-                splitIters += 1
+            audio_segment = AudioSegment.from_wav(byte_io)
+            audio_segment = audio_segment[:-80]
+            audio_segment = audio_segment + 1 # make it a bit louder
+            combined_audio += audio_segment
 
-            
-
-            for fragment in inferenceSettings:
-                if inferenceSettings[fragment]['quote']: # if it was determined part of a quote in the last iteration, skip this iteration.
-                    continue
-                else:
-                    # check if very large quotes are split over multiple fragments 
-                    # after being split by split_and_recombine_text
-                    # maintains proper "quote unquote" modifications
-                    # check if this fragment ends with a quote 
-                    if not inferenceSettings[fragment]['text'].startswith("Quote, \""): # if it doesn't start with ", it's not a quote, indicate it.
-                        pass
-                    else: # otherwise it's a quote (full, beginning, middle or end)
-                        print(inferenceSettings[fragment]['text'])
-                        inferenceSettings[fragment]['quote'] = True
-                        # if alpha > 0.3:
-                        #     inferenceSettings[fragment]['alpha'] = alpha - 0.1 # modify alpha just to test for now
-                        # else:
-                        #     inferenceSettings[fragment]['alpha'] = alpha + 0.1
-                        # if beta > 0.3:
-                        #     inferenceSettings[fragment]['beta'] = beta - 0.1 # modify beta just to test for now
-                        # else:
-                        #     inferenceSettings[fragment]['beta'] = beta + 0.1
-                        if inferenceSettings[fragment]['text'].startswith("\"") and inferenceSettings[fragment]['text'].endswith("\""): # the full quote exists in this fragment, move to next iteration
-                            inferenceSettings[fragment]['quoteType'] = 'full'
-                        else:
-                            if inferenceSettings[fragment]['text'].startswith("\"") and not inferenceSettings[fragment]['text'].endswith("\""): # This is the beginning of large quote
-                                inferenceSettings[fragment]['quote'] = True
-                                inferenceSettings[fragment]['quoteType'] = 'beginning'
-                                findEndQuoteIter = fragment + 1
-                                while True: # find middle (if it's split three or more) and/or end of quote
-                                    if not inferenceSettings[findEndQuoteIter]['text'].startswith("\"") and not inferenceSettings[findEndQuoteIter]['text'].endswith("\""): # if it's the middle, indicate and move to next iter
-                                        inferenceSettings[findEndQuoteIter]['quote'] = True
-                                        inferenceSettings[findEndQuoteIter]['quoteType'] = 'middle'
-                                        findEndQuoteIter += 1
-                                        continue
-                                    if not inferenceSettings[findEndQuoteIter]['text'].startswith("\"") and inferenceSettings[findEndQuoteIter]['text'].endswith("\""): # if it's the end, break out of while loop
-                                        inferenceSettings[findEndQuoteIter]['quote'] = True
-                                        inferenceSettings[findEndQuoteIter]['quoteType'] = 'end'
-                                        break
-                
-                # audios = []
-                fragmentCount = 1
-                fragmentTotal = len(inferenceSettings)
-                combinedFragments = ''
-
-                for fragment in inferenceSettings:
-                    combinedFragments = f'{combinedFragments} {t}'
-                    t = inferenceSettings[fragment]['text']
-                    alpha = inferenceSettings[fragment]['alpha']
-                    beta = inferenceSettings[fragment]['beta']
-                    embedding_scale = inferenceSettings[fragment]['embedding_scale']
-                    try:
-                        progress(0.5, desc=f'Inferencing Chapter: {chapterIter}, Part: {partCount}/{partTotal}, fragment: {fragmentCount}/{fragmentTotal}')
-                    except Exception as e:
-                        print(f"Error updating progress: {e}")
-                    fragmentCount += 1
-                    try:
-                        print(t)
-                        audios.append(inference(t, ref_s, model, sampler, textcleaner, to_mel, device, model_params, global_phonemizer=global_phonemizer, alpha=alpha, beta=beta, diffusion_steps=diffusion_steps, embedding_scale=embedding_scale))
-                    except Exception as e:
-                        print(f'Error sentence: {t}')
-                        print(f"Error Inferencing: {e}")
-        partCount += 1
-
-    try:
-        write(os.path.join(fragmentDirectory, f'{partCount-1}.wav'), 24000, np.concatenate(audios))
-    except Exception as e:
-        print(f'combined fragments: {combinedFragments}')
-        print(f"Error combining and saving: {e}")
-
+        except Exception as e:
+            print(f'Error sentence: {t}')
+            print(f"Error Inferencing: {e}")
 
     audio_opt_dir = os.path.dirname(audio_opt_path)
     audio_opt_filename = os.path.basename(audio_opt_path)
-
-    # Export the combined audio to the output file path
     output_file_path = os.path.join(audio_opt_dir, audio_opt_filename)
-    output_mp3_path = os.path.join(audio_opt_dir,f'{os.path.splitext(os.path.basename(output_file_path))[0]}.mp3')
 
+    try:
+        combined_audio.export(os.path.join(audio_opt_dir,f'{os.path.splitext(os.path.basename(output_file_path))[0]}.mp3'), format="mp3", bitrate="320k")
+        # write(output_wav_path, 24000, np.concatenate(audios)) # write the wav
 
-    audio_segment = AudioSegment.from_wav(os.path.join(fragmentDirectory, f'{partCount-1}.wav'))
-    audio_segment = audio_segment + 1 # make it a bit louder
-    audio_segment.export(output_mp3_path, format="mp3", bitrate="320k")
+        # os.remove(output_wav_path) # remove the wav
+        
+    except Exception as e:
+        print(f"Error combining and saving: {e}")
 
-    # combine_wav_files(fragmentDirectory,audio_opt_dir,audio_opt_filename)
-
-    # # clean up
-    remove_folder_with_contents(fragmentDirectory)
             
 
 def generate_audio(text, voice, reference_audio_file, seed, alpha, beta, diffusion_steps, embedding_scale, voice_model, audio_opt_path=None, voices_root="voices",):
@@ -330,16 +276,24 @@ def generate_audio(text, voice, reference_audio_file, seed, alpha, beta, diffusi
         audios = []
 
         print(f'alpha: {alpha}\nbeta: {beta}\nembedding_scale: {embedding_scale}\ndiffusion_steps:{diffusion_steps}\nseed: {seed}')
+
+        combined_audio = AudioSegment.empty()
         
         for t in texts:
             # print(f'Generating: {t}')
-            audios.append(inference(t, ref_s, model, sampler, textcleaner, to_mel, device, model_params, global_phonemizer=global_phonemizer, alpha=alpha, beta=beta, diffusion_steps=diffusion_steps, embedding_scale=embedding_scale))
+            bytes_wav = bytes()
+            byte_io = BytesIO(bytes_wav)
+            # bytes_wav.seek(0)
+            write(byte_io, 24000, inference(t, ref_s, model, sampler, textcleaner, to_mel, device, model_params, global_phonemizer=global_phonemizer, alpha=alpha, beta=beta, diffusion_steps=diffusion_steps, embedding_scale=embedding_scale))
+            audio_segment = AudioSegment.from_wav(byte_io)
+            audio_segment = audio_segment[:-80]
+            audio_segment = audio_segment + 1 # make it a bit louder
+            combined_audio += audio_segment
+            # audios.append(inference(t, ref_s, model, sampler, textcleaner, to_mel, device, model_params, global_phonemizer=global_phonemizer, alpha=alpha, beta=beta, diffusion_steps=diffusion_steps, embedding_scale=embedding_scale))
 
         rtf = (time.time() - start)
         print(f"RTF = {rtf:5f}")
         
-        
-
         print(f"{k} Synthesized:")
         
         os.makedirs("results", exist_ok=True)
@@ -357,9 +311,18 @@ def generate_audio(text, voice, reference_audio_file, seed, alpha, beta, diffusi
             "voice_model" : voice_model
         })
         
-        write(audio_opt_path, 24000, np.concatenate(audios))
+        # write(audio_opt_path, 24000, np.concatenate(audios))
+        
+
+        audio_opt_dir = os.path.dirname(audio_opt_path)
+        audio_opt_filename = os.path.basename(audio_opt_path)
+        output_file_path = os.path.join(audio_opt_dir, audio_opt_filename)
+        output_wav_path = os.path.join(audio_opt_dir,f'{os.path.splitext(os.path.basename(output_file_path))[0]}.wav')
+        output_mp3_path = os.path.join(audio_opt_dir,f'{os.path.splitext(os.path.basename(output_file_path))[0]}.mp3')
+        combined_audio.export(os.path.join(audio_opt_dir,f'{os.path.splitext(os.path.basename(output_file_path))[0]}.wav'), format='wav')
+
         return audio_opt_path, [[seed_value]]
-       
+    
 
 def train_model(data):
     return f"Model trained with data: {data}"
@@ -459,7 +422,7 @@ def update_button_proxy():
     voice_list_with_defaults = get_voice_list(append_defaults=True)
     datasets_list = get_voice_list(get_voice_dir("datasets"), append_defaults=True)
     train_list = get_folder_list(root="training")
-    return gr.Dropdown(choices=voice_list_with_defaults), gr.Dropdown(choices=datasets_list), gr.Dropdown(choices=voice_list_with_defaults), gr.Dropdown(choices=train_list), gr.Dropdown(choices=train_list)
+    return gr.Dropdown(choices=voice_list_with_defaults), gr.Dropdown(choices=datasets_list), gr.Dropdown(choices=train_list), gr.Dropdown(choices=train_list)
 
 def update_data_proxy(voice_name):
     train_data = os.path.join(TRAINING_DIR, voice_name,"train_phoneme.txt")
@@ -773,13 +736,27 @@ def main():
                     with gr.Row():
                         update_button = gr.Button("Update Voices")
                         generate_button = gr.Button("Generate")
-                    
-                    
-                    
 
-                    
-                    
-            
+            with gr.TabItem("Generate Audiobook"):
+                with gr.Column():
+                    ebook_file = gr.File(label="eBook File",height=50)
+
+                convert_btn = gr.Button("Convert to Audiobook", variant="primary")
+                output = gr.Textbox(label="Conversion Status")
+                download_btn = gr.Button("Download Audiobook Files")
+                download_files = gr.File(label="Download Files", interactive=False)
+
+                from Utils.ebookgenerator import convert_ebook_to_audio,download_audiobooks
+
+                convert_btn.click(convert_ebook_to_audio,
+                                    inputs=[ebook_file],
+                                    outputs=[output]
+                )
+
+                download_btn.click(download_audiobooks,
+                                    outputs=[download_files]
+                )       
+
             with gr.TabItem("Training"):
                 with gr.Tabs():
                     with gr.TabItem("Prepare Dataset"):
@@ -1023,31 +1000,6 @@ def main():
                                 root_path
                             ])
             
-            with gr.TabItem("Generate Audiobook"):
-                with gr.Column():
-                    ebook_file = gr.File(label="eBook File",height=50)
-
-                convert_btn = gr.Button("Convert to Audiobook", variant="primary")
-                output = gr.Textbox(label="Conversion Status")
-                audio_player = gr.Audio(label="Audiobook Player", type="filepath")
-                download_btn = gr.Button("Download Audiobook Files")
-                download_files = gr.File(label="Download Files", interactive=False)
-
-                
-
-                from Utils.ebookgenerator import convert_ebook_to_audio,remove_folder_with_contents,create_chapter_labeled_book,sent_tokenize,create_m4b_from_chapters,download_audiobooks
-
-
-                convert_btn.click(convert_ebook_to_audio,
-                                    inputs=[ebook_file],
-                                    outputs=[output, audio_player]
-                )
-
-                download_btn.click(
-                    download_audiobooks,
-                    outputs=[download_files]
-                )          
-            
             with gr.TabItem("Settings"):
                 list_of_models = get_voice_models()
                 with gr.Row():
@@ -1075,17 +1027,17 @@ def main():
                                         inputs=GENERATE_SETTINGS["voice"], 
                                         outputs=[GENERATE_SETTINGS["reference_audio_file"]]
                                                     )
-        generate_button.click(generate_audio, 
-                                inputs=[GENERATE_SETTINGS["text"],
-                                        GENERATE_SETTINGS["voice"],
-                                        GENERATE_SETTINGS["reference_audio_file"],
-                                        GENERATE_SETTINGS["seed"],
-                                        GENERATE_SETTINGS["alpha"],
-                                        GENERATE_SETTINGS["beta"],
-                                        GENERATE_SETTINGS["diffusion_steps"],
-                                        GENERATE_SETTINGS["embedding_scale"],
-                                        GENERATE_SETTINGS["voice_model"]], 
-                                outputs=[generation_output, seed_output])
+                generate_button.click(generate_audio, 
+                                        inputs=[GENERATE_SETTINGS["text"],
+                                                GENERATE_SETTINGS["voice"],
+                                                GENERATE_SETTINGS["reference_audio_file"],
+                                                GENERATE_SETTINGS["seed"],
+                                                GENERATE_SETTINGS["alpha"],
+                                                GENERATE_SETTINGS["beta"],
+                                                GENERATE_SETTINGS["diffusion_steps"],
+                                                GENERATE_SETTINGS["embedding_scale"],
+                                                GENERATE_SETTINGS["voice_model"]], 
+                                        outputs=[generation_output, seed_output])
        
     webui_port = None         
     while webui_port == None:

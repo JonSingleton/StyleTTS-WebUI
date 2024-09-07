@@ -3,7 +3,7 @@
 import re
 
 
-def split_and_recombine_text(text, desired_length=200, max_length=310):
+def split_and_recombine_text(text, desired_length=230, max_length=300):
     """Split text it into chunks of a desired length trying to keep sentences intact."""
     # normalize text, remove redundant whitespace and convert non-ascii quotes to ascii
     text = re.sub(r'\n\n+', '\n', text)
