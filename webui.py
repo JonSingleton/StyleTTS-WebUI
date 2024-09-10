@@ -70,6 +70,7 @@ textcleaner = None
 to_mel = None
 params_whole = None
 loaded = False
+genData = {}
 
 def load_all_models(model_path):
     global global_phonemizer, model, model_params, sampler, textcleaner, to_mel, params_whole
@@ -92,7 +93,8 @@ def load_all_models(model_path):
         n_mels=80, n_fft=2048, win_length=1200, hop_length=300)
     
     params_whole = load_pretrained_model(model, model_path=model_path)
-    return False
+
+    return {'global_phonemizer':global_phonemizer,'model':model,'model_params':model_params,'sampler':sampler,'textcleaner':textcleaner,'to_mel':to_mel,'params_whole':params_whole}
 
 def unload_all_models():
     global global_phonemizer, model, model_params, sampler, textcleaner, to_mel, params_whole
@@ -169,7 +171,7 @@ def load_voice_model(voice):
     return get_file_path(root_path="models", voice=voice, file_extension=".pth", error_message="No TTS model found in specified location")
 
 
-def generate_audiobook_audio(text, voice, reference_audio_file, seed, alpha, beta, diffusion_steps, embedding_scale, progress, chapterIter, audio_opt_path=None,):
+def generate_audiobook_audio(text, silence, voice, reference_audio_file, seed, alpha, beta, diffusion_steps, embedding_scale, progress, chapterIter, audio_opt_path=None,):
     global global_phonemizer, model, model_params, sampler, textcleaner, to_mel, params_whole, loaded
     
     if not loaded:
@@ -207,9 +209,9 @@ def generate_audiobook_audio(text, voice, reference_audio_file, seed, alpha, bet
     for fragment in inferenceSettings:
 
         t = inferenceSettings[fragment]['text']
-
+        currentChapterProgress = fragmentCount / fragmentTotal
         try:
-            progress(0.5, desc=f'Inferencing Chapter: {chapterIter}, fragment: {fragmentCount}/{fragmentTotal}')
+            progress(currentChapterProgress, desc=f'Inferencing Chapter: {chapterIter}, fragment: {fragmentCount}/{fragmentTotal}')
         except Exception as e:
             print(f"Error updating progress: {e}")
         fragmentCount += 1
@@ -237,6 +239,7 @@ def generate_audiobook_audio(text, voice, reference_audio_file, seed, alpha, bet
             audio_segment = audio_segment[:-80]
             audio_segment = audio_segment + 1 # make it a bit louder
             combined_audio += audio_segment
+            combined_audio += silence
 
         except Exception as e:
             print(f'Error sentence: {t}')
@@ -258,6 +261,8 @@ def generate_audiobook_audio(text, voice, reference_audio_file, seed, alpha, bet
             
 
 def generate_audio(text, voice, reference_audio_file, seed, alpha, beta, diffusion_steps, embedding_scale, voice_model, audio_opt_path=None, voices_root="voices",):
+    
+    
     original_seed = int(seed)
     reference_audio_path = os.path.join(voices_root, voice, reference_audio_file)
     reference_dicts = {f'{voice}': f"{reference_audio_path}"}
@@ -363,8 +368,8 @@ def update_voice_model(model_path):
     path_components = model_path.split(os.path.sep)
     voice = path_components[1]
     loaded_check = load_all_models(model_path=model_path)
-    if loaded_check:
-        raise gr.Warning("No model or model configuration loaded, check model config file is present")
+    # if loaded_check:
+    #     raise gr.Warning("No model or model configuration loaded, check model config file is present")
     gr.Info("Models finished loading")
 
 def get_models_path(voice, model_name, root="models"):
@@ -755,7 +760,8 @@ def main():
 
                 download_btn.click(download_audiobooks,
                                     outputs=[download_files]
-                )       
+                )
+                # ebook_file.upload(extract_metadata_and_cover, inputs=[ebook_file])
 
             with gr.TabItem("Training"):
                 with gr.Tabs():

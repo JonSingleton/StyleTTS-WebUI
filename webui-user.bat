@@ -8,3 +8,5 @@ set COMMANDLINE_ARGS=share=True
 
 call venv\Scripts\activate
 .\venv\Scripts\python.exe webui.py
+
+cmd /k
