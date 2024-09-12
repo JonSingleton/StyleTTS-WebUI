@@ -28,8 +28,7 @@ import time
 import yaml
 import multiprocessing
 import shutil
-from datetime import datetime
-from datetime import timedelta
+import datetime
 import glob
 import webbrowser
 import socket
@@ -39,6 +38,9 @@ from pydub import AudioSegment
 from io import BytesIO
 import re
 import nltk.data
+
+from mutagen.easyid3 import EasyID3
+from mutagen.id3 import ID3,TXXX, ID3NoHeaderError
 
 from styletts2.utils import *
 from modules.tortoise_dataset_tools.dataset_whisper_tools.dataset_maker_large_files import *
@@ -70,7 +72,11 @@ textcleaner = None
 to_mel = None
 params_whole = None
 loaded = False
+ref_s = None
+generateSettings = {}
 genData = {}
+genHistory = {}
+historyFileList = []
 
 def load_all_models(model_path):
     global global_phonemizer, model, model_params, sampler, textcleaner, to_mel, params_whole
@@ -97,7 +103,7 @@ def load_all_models(model_path):
     return {'global_phonemizer':global_phonemizer,'model':model,'model_params':model_params,'sampler':sampler,'textcleaner':textcleaner,'to_mel':to_mel,'params_whole':params_whole}
 
 def unload_all_models():
-    global global_phonemizer, model, model_params, sampler, textcleaner, to_mel, params_whole
+    global global_phonemizer, model, model_params, sampler, textcleaner, to_mel, params_whole, ref_s
 
     if global_phonemizer:
         del global_phonemizer
@@ -133,6 +139,11 @@ def unload_all_models():
         del params_whole
         params_whole = None
         print("Unloaded params_whole")
+
+    if ref_s:
+        del ref_s
+        ref_s = None
+        print("Unloaded ref_s")
 
     do_gc()
     torch.cuda.empty_cache()
@@ -171,101 +182,11 @@ def load_voice_model(voice):
     return get_file_path(root_path="models", voice=voice, file_extension=".pth", error_message="No TTS model found in specified location")
 
 
-def generate_audiobook_audio(text, silence, voice, reference_audio_file, seed, alpha, beta, diffusion_steps, embedding_scale, progress, chapterIter, audio_opt_path=None,):
-    global global_phonemizer, model, model_params, sampler, textcleaner, to_mel, params_whole, loaded
-    
-    if not loaded:
-        update_voice_model(load_settings()["voice_model"])
-        loaded = True
-
-    audios = []
-
-    print(f'seed: {seed}')
-
-    start = time.time()
-    texts = split_and_recombine_text(text)
-
-    reference_audio_path = os.path.join("voices", voice, reference_audio_file)
-    reference_dicts = {f'{voice}': f"{reference_audio_path}"}
-
-    for k, path in reference_dicts.items():
-        mean, std = -4, 4
-        ref_s = compute_style(path, model, to_mel, mean, std, device)
-    
-    inferenceSettings = {}
-    splitIters = 0
-    for st in texts:
-        inferenceSettings[splitIters] = {'text':''}
-        inferenceSettings[splitIters]['text'] = st
-        # try to deal with nasty issue of having sentences that are too short to generate anything but static.
-        splitIters += 1
-        
-    # audios = []
-    fragmentCount = 1
-    fragmentTotal = len(inferenceSettings)
-
-    combined_audio = AudioSegment.empty()
-
-    for fragment in inferenceSettings:
-
-        t = inferenceSettings[fragment]['text']
-        currentChapterProgress = fragmentCount / fragmentTotal
-        try:
-            progress(currentChapterProgress, desc=f'Inferencing Chapter: {chapterIter}, fragment: {fragmentCount}/{fragmentTotal}')
-        except Exception as e:
-            print(f"Error updating progress: {e}")
-        fragmentCount += 1
-        
-        try:
-            bytes_wav = bytes()
-            byte_io = BytesIO(bytes_wav)
-            # bytes_wav.seek(0)
-            write(byte_io, 24000, inference(
-                                t, 
-                                ref_s, 
-                                model, 
-                                sampler, 
-                                textcleaner, 
-                                to_mel, 
-                                device, 
-                                model_params, 
-                                global_phonemizer=global_phonemizer, 
-                                alpha=alpha, 
-                                beta=beta, 
-                                diffusion_steps=diffusion_steps, 
-                                embedding_scale=embedding_scale))
-            
-            audio_segment = AudioSegment.from_wav(byte_io)
-            audio_segment = audio_segment[:-80]
-            audio_segment = audio_segment + 1 # make it a bit louder
-            combined_audio += audio_segment
-            combined_audio += silence
-
-        except Exception as e:
-            print(f'Error sentence: {t}')
-            print(f"Error Inferencing: {e}")
-
-    audio_opt_dir = os.path.dirname(audio_opt_path)
-    audio_opt_filename = os.path.basename(audio_opt_path)
-    output_file_path = os.path.join(audio_opt_dir, audio_opt_filename)
-
-    try:
-        combined_audio.export(os.path.join(audio_opt_dir,f'{os.path.splitext(os.path.basename(output_file_path))[0]}.mp3'), format="mp3", bitrate="320k")
-        # write(output_wav_path, 24000, np.concatenate(audios)) # write the wav
-
-        # os.remove(output_wav_path) # remove the wav
-        
-    except Exception as e:
-        print(f"Error combining and saving: {e}")
-
-            
-
 def generate_audio(text, voice, reference_audio_file, seed, alpha, beta, diffusion_steps, embedding_scale, voice_model, audio_opt_path=None, voices_root="voices",):
-    
+    global generateSettings, ref_s, loaded
     
     original_seed = int(seed)
     reference_audio_path = os.path.join(voices_root, voice, reference_audio_file)
-    reference_dicts = {f'{voice}': f"{reference_audio_path}"}
     # noise = torch.randn(1, 1, 256).to(device)
     start = time.time()
     if original_seed==-1:
@@ -273,38 +194,45 @@ def generate_audio(text, voice, reference_audio_file, seed, alpha, beta, diffusi
     else:
         seed_value = original_seed
     set_seeds(seed_value)
-    for k, path in reference_dicts.items():
-        mean, std = -4, 4
-        ref_s = compute_style(path, model, to_mel, mean, std, device)
+    
+    mean, std = -4, 4
+    if ref_s == None or reference_audio_file != generateSettings['reference_audio_file'] or voice != generateSettings['voice']:
+        ref_s = compute_style(reference_audio_path, model, to_mel, mean, std, device)
+    # ref_s = compute_style(path, model, to_mel, mean, std, device)
 
-        texts = split_and_recombine_text(text)
-        audios = []
+    texts = split_and_recombine_text(text)
+    audios = []
 
-        print(f'alpha: {alpha}\nbeta: {beta}\nembedding_scale: {embedding_scale}\ndiffusion_steps:{diffusion_steps}\nseed: {seed}')
+    print(f'seed: {seed_value}\nalpha: {alpha}\nbeta: {beta}\nembedding_scale: {embedding_scale}\ndiffusion_steps: {diffusion_steps}\nvoice: {voice}\nvoice_model: {voice_model}')
 
-        combined_audio = AudioSegment.empty()
-        
-        for t in texts:
-            # print(f'Generating: {t}')
-            bytes_wav = bytes()
-            byte_io = BytesIO(bytes_wav)
-            # bytes_wav.seek(0)
-            write(byte_io, 24000, inference(t, ref_s, model, sampler, textcleaner, to_mel, device, model_params, global_phonemizer=global_phonemizer, alpha=alpha, beta=beta, diffusion_steps=diffusion_steps, embedding_scale=embedding_scale))
-            audio_segment = AudioSegment.from_wav(byte_io)
-            audio_segment = audio_segment[:-80]
-            audio_segment = audio_segment + 1 # make it a bit louder
-            combined_audio += audio_segment
-            # audios.append(inference(t, ref_s, model, sampler, textcleaner, to_mel, device, model_params, global_phonemizer=global_phonemizer, alpha=alpha, beta=beta, diffusion_steps=diffusion_steps, embedding_scale=embedding_scale))
+    combined_audio = AudioSegment.empty()
+    
+    for t in texts:
+        # print(f'Generating: {t}')
+        bytes_wav = bytes()
+        byte_io = BytesIO(bytes_wav)
+        # bytes_wav.seek(0)
+        write(byte_io, 24000, inference(t, ref_s, model, sampler, textcleaner, to_mel, device, model_params, global_phonemizer=global_phonemizer, alpha=alpha, beta=beta, diffusion_steps=diffusion_steps, embedding_scale=embedding_scale))
+        audio_segment = AudioSegment.from_wav(byte_io)
+        audio_segment = audio_segment[:-80]
+        audio_segment = audio_segment + 1 # make it a bit louder
+        combined_audio += audio_segment
+        # audios.append(inference(t, ref_s, model, sampler, textcleaner, to_mel, device, model_params, global_phonemizer=global_phonemizer, alpha=alpha, beta=beta, diffusion_steps=diffusion_steps, embedding_scale=embedding_scale))
 
         rtf = (time.time() - start)
         print(f"RTF = {rtf:5f}")
         
-        print(f"{k} Synthesized:")
+        print(f"{voice} Synthesized:")
+        genDate = datetime.datetime.now()
+        genDateLocal = datetime.datetime.strptime(genDate.strftime("%c"), '%a %b %d %H:%M:%S %Y')
+        genDateReadable = genDateLocal.strftime("%m-%d-%y_%H-%M-%S")
+
+        print(genDateReadable)
         
-        os.makedirs("results", exist_ok=True)
-        audio_opt_path = os.path.join("results", f"{voice}_output.wav")
-            
-        save_settings({
+        os.makedirs(os.path.join(".","results",f"{voice}"), exist_ok=True)
+        audio_opt_path = os.path.join("results", f"{voice}", f"{voice}-{genDateReadable}.wav")
+
+        generateSettings = {
             "text": text,
             "voice": voice,
             "reference_audio_file": reference_audio_file,
@@ -314,7 +242,9 @@ def generate_audio(text, voice, reference_audio_file, seed, alpha, beta, diffusi
             "diffusion_steps": diffusion_steps,
             "embedding_scale": embedding_scale,
             "voice_model" : voice_model
-        })
+        }
+            
+        save_settings(generateSettings)
         
         # write(audio_opt_path, 24000, np.concatenate(audios))
         
@@ -324,9 +254,29 @@ def generate_audio(text, voice, reference_audio_file, seed, alpha, beta, diffusi
         output_file_path = os.path.join(audio_opt_dir, audio_opt_filename)
         output_wav_path = os.path.join(audio_opt_dir,f'{os.path.splitext(os.path.basename(output_file_path))[0]}.wav')
         output_mp3_path = os.path.join(audio_opt_dir,f'{os.path.splitext(os.path.basename(output_file_path))[0]}.mp3')
-        combined_audio.export(os.path.join(audio_opt_dir,f'{os.path.splitext(os.path.basename(output_file_path))[0]}.wav'), format='wav')
 
-        return audio_opt_path, [[seed_value]]
+        combined_audio.export(output_wav_path, format='wav')
+
+        ID3Tags = {
+            'seed':seed_value,
+            'original_seed':original_seed,
+            'alpha':alpha,
+            'beta':beta,
+            'diffusion_steps':diffusion_steps,
+            'embedding_scale':embedding_scale,
+            'reference_audio_path':reference_audio_path,
+            'voice':voice,
+            'voice_model':voice_model,
+            'rtf':f'{rtf:5f}',
+            'text':text,
+            'date_generated': genDateLocal.strftime("%I:%M:%S %p, %a, %b %d, %Y")
+        }
+
+        tagWAV(output_wav_path,ID3Tags)
+
+        fileList,genHistoryArray = getGenHistory()
+
+        return audio_opt_path, [[seed_value]], genHistoryArray
     
 
 def train_model(data):
@@ -393,9 +343,12 @@ def update_voice_settings(voice):
         return ref_aud_path, gr.Dropdown(choices=[]) 
 
 def load_settings():
+    global generateSettings, loaded
     try:
         with open(SETTINGS_FILE_PATH, "r") as f:
-            return yaml.safe_load(f)
+            generateSettings = yaml.safe_load(f)
+            loaded = True
+            return generateSettings
     except FileNotFoundError:
         if reference_audio_list:
             reference_file = reference_audio_list[0]
@@ -686,6 +639,126 @@ else:
 def is_port_in_use(port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         return sock.connect_ex(('localhost', port)) == 0
+    
+def tagWAV(filepath,newtags={}):
+    '''
+        Basic and easy implementation to tag generated files
+        intention is to be able to inject generation settings
+        into each wav, enabling easy setting repeats similar to
+        that seen in Automatic1111 for SD.
+        ex: tagWAV(filepath,{'seed':1806341205,'beta':0.2}))
+        generation history done
+        todo: implement "send to generation tab" functionality.
+    '''
+    try:
+        tags = ID3(filepath)
+    except ID3NoHeaderError:
+        tags = ID3()
+        tags.save(filepath)
+
+    # set the tags
+    audio = EasyID3(filepath)
+    try:
+        for t in newtags:
+            audio.RegisterTXXXKey(t, t.upper())
+            audio[t] = str(newtags[t])
+    except Exception as e:
+        print(f"Error tagging wav: {e}")
+    
+    # save the tags
+    audio.save(filepath)
+
+    audio2 = EasyID3(filepath)
+    
+    # show the tags
+    print(audio2['seed'])
+
+    return True
+
+def getWAVtags(filepath):
+    '''
+        return all relevant tags from a wav file
+    '''
+    try:
+        tags = ID3(filepath)
+    except ID3NoHeaderError:
+        # print('found none')
+        return
+
+    # load file
+    audio = EasyID3(filepath)
+    neededTags = ['voice','seed','original_seed','alpha','beta','diffusion_steps','embedding_scale','reference_audio_path','voice_model','rtf','text','date_generated']
+    for t in neededTags:
+        audio.RegisterTXXXKey(t, t.upper())
+    return audio
+
+def getGenHistory():
+    '''
+        Iterates over results folder and subfolders for .wav/.mp3 files that have ID3 tags generated by this app
+        creates a set of lists to be run through np.column_stack to populate the dataframe on the history page with
+    '''
+    global historyFileList
+    global genHistory
+
+    fVoice = []
+    fSeed = []
+    fAlpha = []
+    fBeta = []
+    fSteps = []
+    fScale = []
+    fDate = []
+    historyFileIter = 0
+    historyFileList = []
+    genHistory = {}
+
+    tmp_historyFileList = [os.path.join(dirpath,f) for (dirpath, dirnames, filenames) in os.walk('results') for f in filenames if f.endswith('.wav') or f.endswith('.mp3')]
+
+    for f in tmp_historyFileList:
+        ftags = getWAVtags(f)
+        if ftags:
+            #  print(ftags)
+            historyFileList.append(f)
+            fVoice.append(ftags['voice'][0])
+            fDate.append(ftags['date_generated'][0])
+            fSeed.append(ftags['seed'][0])
+            fAlpha.append(ftags['alpha'][0])
+            fBeta.append(ftags['beta'][0])
+            fSteps.append(ftags['diffusion_steps'][0])
+            fScale.append(ftags['embedding_scale'][0])
+
+            genHistory[historyFileIter] = {
+                'filepath':f,
+                'voice_model':ftags['voice_model'][0],
+                'voice':ftags['voice'][0],
+                'reference_audio_path':ftags['reference_audio_path'][0],
+                'date_generated':ftags['date_generated'][0],
+                'seed':ftags['seed'][0],
+                'original_seed':ftags['original_seed'][0],
+                'alpha':ftags['alpha'][0],
+                'beta':ftags['beta'][0],
+                'diffusion_steps':ftags['diffusion_steps'][0],
+                'embedding_scale':ftags['embedding_scale'][0],
+                'rtf':ftags['rtf'][0],
+                'text':ftags['text'][0],
+            }
+
+            historyFileIter += 1
+
+    genHistoryArray = np.column_stack([fVoice,fSeed,fAlpha,fBeta,fSteps,fScale,fDate])
+
+    historyFileList = tmp_historyFileList
+    return fVoice,genHistoryArray
+
+def populateGenHistoryData(value, evt: gr.EventData, sel: gr.SelectData):
+    '''
+        Grabs necessary info for displaying the clicked history record
+    '''
+    audioReturn = historyFileList[sel.index[0]]
+    textReturn = f"{genHistory[sel.index[0]]['text']}"
+    settingsReturn = np.array(list({k:v for k,v in genHistory[sel.index[0]].items() if k not in ['text']}.items()))
+
+    return audioReturn,textReturn,settingsReturn
+    
 
 def main():
     initial_settings = load_settings()
@@ -697,7 +770,7 @@ def main():
         # list_of_models = None
         ref_audio_file_choices = None
 
-    with gr.Blocks() as demo:
+    with gr.Blocks(css=".gradio-container-4-38-1 table {height: 250px; width: 100%;overflow-x: hidden !important;; overflow-y: scroll !important; scrollbar-width: thin !important; padding-right: 17px !important; box-sizing: content-box !important;} ::-webkit-scrollbar {display: none;}") as demo:
         with gr.Tabs():
             with gr.TabItem("Generation"):
                 with gr.Column():
@@ -741,6 +814,41 @@ def main():
                     with gr.Row():
                         update_button = gr.Button("Update Voices")
                         generate_button = gr.Button("Generate")
+                
+            with gr.TabItem("History"):
+                with gr.Column():
+                    with gr.Row():
+                        with gr.Column():
+                            selectedFilePlayer = gr.Audio(label="Player", show_label=False, interactive=False)
+                            with gr.Accordion("Generation Settings", open=False):
+                                 generationHistorySettings = gr.Dataframe(
+                                    headers=["Option", "Value"],
+                                    datatype=["str", "str"],
+                                    column_widths=["30%","70%"],
+                                    row_count=12,
+                                    col_count=(2, "fixed"),
+                                    interactive=False,
+                                    min_width="30px",
+                                    )
+                    
+                    
+                            with gr.Accordion("Generation Text", open=False):
+                                generationHistoryText = gr.Markdown("")
+
+                    fVoice,genHistoryArray = getGenHistory()
+                    
+                    historyFiles = gr.Dataframe(
+                        headers=["Voice", "Seed", "Alpha", "Beta", "Steps", "Scale", "Date"],
+                        datatype=["str", "number", "number", "number", "number", "number", "date"],
+                        column_widths=["50px","30px","30px","30px","30px","30px","90px"],
+                        row_count=len(fVoice),
+                        col_count=(7, "fixed"),
+                        interactive=False,
+                        min_width="30px",
+                        value=genHistoryArray
+                        )
+                    
+                    historyFiles.select(populateGenHistoryData, inputs=[historyFiles], outputs=[selectedFilePlayer,generationHistoryText,generationHistorySettings])
 
             with gr.TabItem("Generate Audiobook"):
                 with gr.Column():
@@ -1043,7 +1151,7 @@ def main():
                                                 GENERATE_SETTINGS["diffusion_steps"],
                                                 GENERATE_SETTINGS["embedding_scale"],
                                                 GENERATE_SETTINGS["voice_model"]], 
-                                        outputs=[generation_output, seed_output])
+                                        outputs=[generation_output, seed_output, historyFiles])
        
     webui_port = None         
     while webui_port == None:
