@@ -8,6 +8,10 @@ An all-in-one inferencing and training WebUI for StyleTTS.  The intended compatb
 
 ✔️ Training tab with tensorboard monitoring available
 
+✔️ Audiobook generation tab that creates a full m4b audiobook from a dragged-and-dropped ebook.
+
+✔️ History tab populated using ID3 tags embedded on each generated file.
+
 
 ***** note that this is a fork of the initial work to put this in a webui by Jarod Mica - https://github.com/JarodMica?tab=repositories. This is just my little version with QOL changes that suit me.
 
