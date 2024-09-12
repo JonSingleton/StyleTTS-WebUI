@@ -219,64 +219,64 @@ def generate_audio(text, voice, reference_audio_file, seed, alpha, beta, diffusi
         combined_audio += audio_segment
         # audios.append(inference(t, ref_s, model, sampler, textcleaner, to_mel, device, model_params, global_phonemizer=global_phonemizer, alpha=alpha, beta=beta, diffusion_steps=diffusion_steps, embedding_scale=embedding_scale))
 
-        rtf = (time.time() - start)
-        print(f"RTF = {rtf:5f}")
+    rtf = (time.time() - start)
+    print(f"RTF = {rtf:5f}")
+    
+    print(f"{voice} Synthesized:")
+    genDate = datetime.datetime.now()
+    genDateLocal = datetime.datetime.strptime(genDate.strftime("%c"), '%a %b %d %H:%M:%S %Y')
+    genDateReadable = genDateLocal.strftime("%m-%d-%y_%H-%M-%S")
+
+    print(genDateReadable)
+    
+    os.makedirs(os.path.join(".","results",f"{voice}"), exist_ok=True)
+    audio_opt_path = os.path.join("results", f"{voice}", f"{voice}-{genDateReadable}.wav")
+
+    generateSettings = {
+        "text": text,
+        "voice": voice,
+        "reference_audio_file": reference_audio_file,
+        "seed": original_seed if original_seed == -1 else seed_value,
+        "alpha": alpha,
+        "beta": beta,
+        "diffusion_steps": diffusion_steps,
+        "embedding_scale": embedding_scale,
+        "voice_model" : voice_model
+    }
         
-        print(f"{voice} Synthesized:")
-        genDate = datetime.datetime.now()
-        genDateLocal = datetime.datetime.strptime(genDate.strftime("%c"), '%a %b %d %H:%M:%S %Y')
-        genDateReadable = genDateLocal.strftime("%m-%d-%y_%H-%M-%S")
+    save_settings(generateSettings)
+    
+    # write(audio_opt_path, 24000, np.concatenate(audios))
+    
 
-        print(genDateReadable)
-        
-        os.makedirs(os.path.join(".","results",f"{voice}"), exist_ok=True)
-        audio_opt_path = os.path.join("results", f"{voice}", f"{voice}-{genDateReadable}.wav")
+    audio_opt_dir = os.path.dirname(audio_opt_path)
+    audio_opt_filename = os.path.basename(audio_opt_path)
+    output_file_path = os.path.join(audio_opt_dir, audio_opt_filename)
+    output_wav_path = os.path.join(audio_opt_dir,f'{os.path.splitext(os.path.basename(output_file_path))[0]}.wav')
+    output_mp3_path = os.path.join(audio_opt_dir,f'{os.path.splitext(os.path.basename(output_file_path))[0]}.mp3')
 
-        generateSettings = {
-            "text": text,
-            "voice": voice,
-            "reference_audio_file": reference_audio_file,
-            "seed": original_seed if original_seed == -1 else seed_value,
-            "alpha": alpha,
-            "beta": beta,
-            "diffusion_steps": diffusion_steps,
-            "embedding_scale": embedding_scale,
-            "voice_model" : voice_model
-        }
-            
-        save_settings(generateSettings)
-        
-        # write(audio_opt_path, 24000, np.concatenate(audios))
-        
+    combined_audio.export(output_wav_path, format='wav')
 
-        audio_opt_dir = os.path.dirname(audio_opt_path)
-        audio_opt_filename = os.path.basename(audio_opt_path)
-        output_file_path = os.path.join(audio_opt_dir, audio_opt_filename)
-        output_wav_path = os.path.join(audio_opt_dir,f'{os.path.splitext(os.path.basename(output_file_path))[0]}.wav')
-        output_mp3_path = os.path.join(audio_opt_dir,f'{os.path.splitext(os.path.basename(output_file_path))[0]}.mp3')
+    ID3Tags = {
+        'seed':seed_value,
+        'original_seed':original_seed,
+        'alpha':alpha,
+        'beta':beta,
+        'diffusion_steps':diffusion_steps,
+        'embedding_scale':embedding_scale,
+        'reference_audio_path':reference_audio_path,
+        'voice':voice,
+        'voice_model':voice_model,
+        'rtf':f'{rtf:5f}',
+        'text':text,
+        'date_generated': genDateLocal.strftime("%I:%M:%S %p, %a, %b %d, %Y")
+    }
 
-        combined_audio.export(output_wav_path, format='wav')
+    tagWAV(output_wav_path,ID3Tags)
 
-        ID3Tags = {
-            'seed':seed_value,
-            'original_seed':original_seed,
-            'alpha':alpha,
-            'beta':beta,
-            'diffusion_steps':diffusion_steps,
-            'embedding_scale':embedding_scale,
-            'reference_audio_path':reference_audio_path,
-            'voice':voice,
-            'voice_model':voice_model,
-            'rtf':f'{rtf:5f}',
-            'text':text,
-            'date_generated': genDateLocal.strftime("%I:%M:%S %p, %a, %b %d, %Y")
-        }
+    fileList,genHistoryArray = getGenHistory()
 
-        tagWAV(output_wav_path,ID3Tags)
-
-        fileList,genHistoryArray = getGenHistory()
-
-        return audio_opt_path, [[seed_value]], genHistoryArray
+    return audio_opt_path, [[seed_value]], genHistoryArray
     
 
 def train_model(data):
@@ -651,10 +651,10 @@ def tagWAV(filepath,newtags={}):
         todo: implement "send to generation tab" functionality.
     '''
     try:
-        tags = ID3(filepath)
+        tags = ID3(filepath, v2_version=3)
     except ID3NoHeaderError:
         tags = ID3()
-        tags.save(filepath)
+        tags.save(filepath, v2_version=3)
 
     # set the tags
     audio = EasyID3(filepath)
@@ -666,7 +666,7 @@ def tagWAV(filepath,newtags={}):
         print(f"Error tagging wav: {e}")
     
     # save the tags
-    audio.save(filepath)
+    audio.save(filepath, v2_version=3)
 
     audio2 = EasyID3(filepath)
     
@@ -746,7 +746,7 @@ def getGenHistory():
 
     genHistoryArray = np.column_stack([fVoice,fSeed,fAlpha,fBeta,fSteps,fScale,fDate])
 
-    historyFileList = tmp_historyFileList
+    # historyFileList = tmp_historyFileList
     return fVoice,genHistoryArray
 
 def populateGenHistoryData(value, evt: gr.EventData, sel: gr.SelectData):
