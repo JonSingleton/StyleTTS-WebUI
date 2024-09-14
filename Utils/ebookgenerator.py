@@ -438,6 +438,28 @@ def convert_ebook_to_audio(ebook_file, progress=gr.Progress()):
 
     reference_audio_path = os.path.join("voices", currentSettings["voice"], currentSettings["reference_audio_file"])
 
+    # try to give a reasonable ETA after a bit.
+    start = time.time()
+    allInferencesETAList = []
+
+    def getETA(start,inferenceCounter,totalInferences,currentInference):
+        # example: if in 30 seconds it infers 22 fragments
+        # 30 / 22 = 1.36 secPerInference
+        # so calculate totalInferences - currentInference to get remainingInferences
+        # mutliply remainingInferences * secPerInference to get inferencesETA
+        # appnd inferencesETA to allInferencesETAList
+        # add all items in allInferencesETAList and divide by len(allInferencesETAList) to get avgAllInferencesETAList
+        # avgAllInferencesETAList should be relatively consistent after so long. maybe. Possibly. ...probably
+
+        secPerInference = ((time.time() - start) / inferenceCounter)
+        remainingInferences = totalInferences - currentInference
+        inferencesETA = remainingInferences * secPerInference
+        allInferencesETAList.append(inferencesETA)
+        currentAverageETA = round(sum(allInferencesETAList) / len(allInferencesETAList),2)
+        currentAverageETA = str(datetime.timedelta(currentAverageETA=666))
+
+        return currentAverageETA
+
     # compute reference voice data
     mean, std = -4, 4
     print(f'types: model: {model}, to_mel: {to_mel}')
@@ -446,6 +468,8 @@ def convert_ebook_to_audio(ebook_file, progress=gr.Progress()):
 
     # kick off background thread for exporting audio from the queue.
     queueThreadManager('start')
+
+    expectedETA = 0
 
     for i in genData['genPaths']['chapterTexts']:
         chapterNum = i
@@ -473,7 +497,8 @@ def convert_ebook_to_audio(ebook_file, progress=gr.Progress()):
             inferenceCounter = 1
             currentProgressPercent = currentInference / totalInferences
             for t in genData['genPaths']['chapterTexts'][i]['inferences'][i2]:
-                progress(currentProgressPercent, desc=f"Inferencing: Chapter {chapterNum} of {totalChapterCount} | Section {i2} of {len(genData['genPaths']['chapterTexts'][i]['inferences'])} | Fragment {inferenceCounter} of {len(genData['genPaths']['chapterTexts'][i]['inferences'][i2])}")
+                currentAverageETA = getETA(start,inferenceCounter,totalInferences,currentInference)
+                progress(currentProgressPercent, desc=f"Inferencing: Chapter {chapterNum} of {totalChapterCount} | Section {i2} of {len(genData['genPaths']['chapterTexts'][i]['inferences'])} | Fragment {inferenceCounter} of {len(genData['genPaths']['chapterTexts'][i]['inferences'][i2])}. Estimated ETA: {currentAverageETA}")
             
             
 
@@ -502,6 +527,8 @@ def convert_ebook_to_audio(ebook_file, progress=gr.Progress()):
                 audio_segment = audio_segment + 1 # make it a bit louder
                 combined_audio += audio_segment
                 combined_audio += silence
+
+                
 
                 inferenceCounter += 1
                 currentInference += 1

@@ -49,6 +49,7 @@ from Utils.splitcombine import split_and_recombine_text
 
 # Path to the settings file
 SETTINGS_FILE_PATH = "Configs/generate_settings.yaml"
+APP_SETTINGS_FILE_PATH = "Configs/app_settings.yaml"
 GENERATE_SETTINGS = {}
 TRAINING_DIR = "training"
 BASE_CONFIG_FILE_PATH = r"Configs\template_config_ft.yml"
@@ -73,6 +74,7 @@ to_mel = None
 params_whole = None
 loaded = False
 ref_s = None
+appSettings = {}
 generateSettings = {}
 genData = {}
 genHistory = {}
@@ -141,7 +143,7 @@ def unload_all_models():
         print("Unloaded params_whole")
 
     if ref_s:
-        del ref_s
+        # del ref_s
         ref_s = None
         print("Unloaded ref_s")
 
@@ -223,11 +225,10 @@ def generate_audio(text, voice, reference_audio_file, seed, alpha, beta, diffusi
     print(f"RTF = {rtf:5f}")
     
     print(f"{voice} Synthesized:")
+    
     genDate = datetime.datetime.now()
     genDateLocal = datetime.datetime.strptime(genDate.strftime("%c"), '%a %b %d %H:%M:%S %Y')
     genDateReadable = genDateLocal.strftime("%m-%d-%y_%H-%M-%S")
-
-    print(genDateReadable)
     
     os.makedirs(os.path.join(".","results",f"{voice}"), exist_ok=True)
     audio_opt_path = os.path.join("results", f"{voice}", f"{voice}-{genDateReadable}.wav")
@@ -257,26 +258,27 @@ def generate_audio(text, voice, reference_audio_file, seed, alpha, beta, diffusi
 
     combined_audio.export(output_wav_path, format='wav')
 
-    ID3Tags = {
-        'seed':seed_value,
-        'original_seed':original_seed,
-        'alpha':alpha,
-        'beta':beta,
-        'diffusion_steps':diffusion_steps,
-        'embedding_scale':embedding_scale,
-        'reference_audio_path':reference_audio_path,
-        'voice':voice,
-        'voice_model':voice_model,
-        'rtf':f'{rtf:5f}',
-        'text':text,
-        'date_generated': genDateLocal.strftime("%I:%M:%S %p, %a, %b %d, %Y")
-    }
+    if appSettings['enableID3tagging']:
+        ID3Tags = {
+            'seed':seed_value,
+            'original_seed':original_seed,
+            'alpha':alpha,
+            'beta':beta,
+            'diffusion_steps':diffusion_steps,
+            'embedding_scale':embedding_scale,
+            'reference_audio_path':reference_audio_path,
+            'voice':voice,
+            'voice_model':voice_model,
+            'rtf':f'{rtf:5f}',
+            'text':text,
+            'date_generated': genDateLocal.strftime("%I:%M:%S %p, %a, %b %d, %Y")
+        }
 
-    tagWAV(output_wav_path,ID3Tags)
+        tagWAV(output_wav_path,ID3Tags)
 
-    fileList,genHistoryArray = getGenHistory()
+        fileList,genHistoryArray = getGenHistory()
 
-    return audio_opt_path, [[seed_value]], genHistoryArray
+    return audio_opt_path, [[seed_value]], genHistoryArray if appSettings['enableID3tagging'] else None
     
 
 def train_model(data):
@@ -342,39 +344,57 @@ def update_voice_settings(voice):
         ref_aud_path = update_reference_audio(voice)
         return ref_aud_path, gr.Dropdown(choices=[]) 
 
-def load_settings():
-    global generateSettings, loaded
-    try:
-        with open(SETTINGS_FILE_PATH, "r") as f:
-            generateSettings = yaml.safe_load(f)
-            loaded = True
-            return generateSettings
-    except FileNotFoundError:
-        if reference_audio_list:
-            reference_file = reference_audio_list[0]
-        else:
-            reference_file = None
-        if voice_list_with_defaults:
-            voice = voice_list_with_defaults[0]
-        else:
-            voice = None
-         
-        settings_list = {
-            "text": "Inferencing with this sentence, just to make sure things work!",
-            "voice": voice,
-            "reference_audio_file": reference_file,
-            "seed" : "-1",
-            "alpha": 0.3,
-            "beta": 0.7,
-            "diffusion_steps": 30,
-            "embedding_scale": 1.0,
-            "voice_model" : "models\pretrain_base_1\epochs_2nd_00020.pth"
-        }
-        return settings_list
+def load_settings(settingsType='generate'):
+    if settingsType  == 'generate':
+        global generateSettings, loaded
+        try:
+            with open(SETTINGS_FILE_PATH, "r") as f:
+                generateSettings = yaml.safe_load(f)
+                loaded = True
+                return generateSettings
+        except FileNotFoundError:
+            if reference_audio_list:
+                reference_file = reference_audio_list[0]
+            else:
+                reference_file = None
+            if voice_list_with_defaults:
+                voice = voice_list_with_defaults[0]
+            else:
+                voice = None
+            
+            settings_list = {
+                "text": "Inferencing with this sentence, just to make sure things work!",
+                "voice": voice,
+                "reference_audio_file": reference_file,
+                "seed" : "-1",
+                "alpha": 0.3,
+                "beta": 0.7,
+                "diffusion_steps": 30,
+                "embedding_scale": 1.0,
+                "voice_model" : "models\pretrain_base_1\epochs_2nd_00020.pth"
+            }
+            return settings_list
+        
+    if settingsType == 'app':
+        global appSettings
+        try:
+            with open(APP_SETTINGS_FILE_PATH, "r") as f:
+                appSettings = yaml.safe_load(f)
+                return appSettings
+        except FileNotFoundError:
+            appSettings = {
+                "enableID3tagging": True
+            }
+            save_settings(appSettings,'app')
+            return appSettings
 
-def save_settings(settings):
-    with open(SETTINGS_FILE_PATH, "w") as f:
-        yaml.safe_dump(settings, f)
+def save_settings(settings,settingsType='generation'):
+    if settingsType == 'generation':
+        with open(SETTINGS_FILE_PATH, "w") as f:
+            yaml.safe_dump(settings, f)
+    if settingsType == 'app':
+        with open(APP_SETTINGS_FILE_PATH, "w") as f:
+            yaml.safe_dump(settings, f)
         
 def update_button_proxy():
     voice_list_with_defaults = get_voice_list(append_defaults=True)
@@ -758,10 +778,16 @@ def populateGenHistoryData(value, evt: gr.EventData, sel: gr.SelectData):
     settingsReturn = np.array(list({k:v for k,v in genHistory[sel.index[0]].items() if k not in ['text']}.items()))
 
     return audioReturn,textReturn,settingsReturn
+                
+def UpdateMetadataFlag(value):
+    appSettings['enableID3tagging'] = value
+    save_settings(appSettings,settingsType='app')
     
 
 def main():
+    global appSettings
     initial_settings = load_settings()
+    appSettings = load_settings(settingsType='app')
     if voice_list_with_defaults:
         load_all_models(initial_settings["voice_model"])
         
@@ -813,15 +839,15 @@ def main():
                             )
                     with gr.Row():
                         update_button = gr.Button("Update Voices")
-                        generate_button = gr.Button("Generate")
-                
+                        generate_button = gr.Button("Generate", variant="primary")
+ 
             with gr.TabItem("History"):
                 with gr.Column():
                     with gr.Row():
                         with gr.Column():
                             selectedFilePlayer = gr.Audio(label="Player", show_label=False, interactive=False)
                             with gr.Accordion("Generation Settings", open=False):
-                                 generationHistorySettings = gr.Dataframe(
+                                generationHistorySettings = gr.Dataframe(
                                     headers=["Option", "Value"],
                                     datatype=["str", "str"],
                                     column_widths=["30%","70%"],
@@ -1117,16 +1143,24 @@ def main():
             with gr.TabItem("Settings"):
                 list_of_models = get_voice_models()
                 with gr.Row():
-                    GENERATE_SETTINGS["voice_model"] = gr.Dropdown(
-                        choices=list_of_models, label="Voice Models", type="value", value=initial_settings["voice_model"], scale=6)
-                    refresh_models_available_button = gr.Button(
-                        value="Refresh Models Available", scale=1)
-                unload_all_models_button = gr.Button(
-                        value="Unload all loaded models")    
+                    with gr.Column():
+                        GENERATE_SETTINGS["voice_model"] = gr.Dropdown(
+                            choices=list_of_models, interactive=True, label="Voice Models", type="value", value=initial_settings["voice_model"], scale=6)
+                        refresh_models_available_button = gr.Button(
+                            value="Refresh Models Available", scale=1, variant='primary')
+                        unload_all_models_button = gr.Button(
+                                value="Unload all loaded models")    
+                    with gr.Column():
+                        metadataFlagCheck = gr.Checkbox(value=appSettings['enableID3tagging'], interactive=True, label="Enable ID3 embedding")
+                        with gr.Accordion("ID3 toggle further explanation", open=False):
+                            gr.Markdown("Most media players don't have an issue playing WAV files with id3 tags, however some will see the file as corrupt. The history page is built around the ID3 tag embedding on generation so if this is disabled then there won't be any history.")
                 
                 def update_models():
                     list_of_models = get_voice_models()
                     return gr.Dropdown(choices=list_of_models)
+
+                metadataFlagCheck.change(UpdateMetadataFlag,metadataFlagCheck)
+                    
                 
                 refresh_models_available_button.click(fn=update_models,
                                                       outputs=GENERATE_SETTINGS["voice_model"]
