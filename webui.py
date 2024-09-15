@@ -39,8 +39,9 @@ from io import BytesIO
 import re
 import nltk.data
 
-from mutagen.easyid3 import EasyID3
-from mutagen.id3 import ID3,TXXX, ID3NoHeaderError
+from mutagen import wave
+from mutagen.wave import WAVE
+from mutagen.id3 import TXXX
 
 from styletts2.utils import *
 from modules.tortoise_dataset_tools.dataset_whisper_tools.dataset_maker_large_files import *
@@ -271,7 +272,7 @@ def generate_audio(text, voice, reference_audio_file, seed, alpha, beta, diffusi
             'voice_model':voice_model,
             'rtf':f'{rtf:5f}',
             'text':text,
-            'date_generated': genDateLocal.strftime("%I:%M:%S %p, %a, %b %d, %Y")
+            'date_generated': genDateLocal.strftime("%Y-%m-%d, %H:%M:%S")
         }
 
         tagWAV(output_wav_path,ID3Tags)
@@ -659,7 +660,7 @@ else:
 def is_port_in_use(port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         return sock.connect_ex(('localhost', port)) == 0
-    
+
 def tagWAV(filepath,newtags={}):
     '''
         Basic and easy implementation to tag generated files
@@ -670,28 +671,37 @@ def tagWAV(filepath,newtags={}):
         generation history done
         todo: implement "send to generation tab" functionality.
     '''
-    try:
-        tags = ID3(filepath, v2_version=3)
-    except ID3NoHeaderError:
-        tags = ID3()
-        tags.save(filepath, v2_version=3)
 
-    # set the tags
-    audio = EasyID3(filepath)
+    if len(newtags) == 0:
+        print('No tags provided')
+        return
+
+    wav = WAVE(filepath)
+    id3 = wav.tags
+
+    try:
+        wave.WAVE.add_tags(wav)
+        wav.save(filepath, v2_version=3)
+        id3 = wav.tags
+    except Exception as e:
+        print(f"Error adding tag: {e}")
+
     try:
         for t in newtags:
-            audio.RegisterTXXXKey(t, t.upper())
-            audio[t] = str(newtags[t])
+            print(f'Adding {t}: {newtags[t]}')
+            id3.add(TXXX(encoding=3, desc=t, text=str(newtags[t])))
+            # id3.add(TXXX(encoding=3, desc="Alpha", text="1"))
     except Exception as e:
         print(f"Error tagging wav: {e}")
-    
-    # save the tags
-    audio.save(filepath, v2_version=3)
 
-    audio2 = EasyID3(filepath)
-    
-    # show the tags
-    print(audio2['seed'])
+    separator = '/'
+    id3.save(filepath, v23_sep=separator)
+    wav = wave.WAVE(filepath)
+    id3 = wav.tags
+
+    for t in newtags:
+        t = f'TXXX:{t}'
+        print(f'{t}: {id3[t]}')
 
     return True
 
@@ -700,17 +710,21 @@ def getWAVtags(filepath):
         return all relevant tags from a wav file
     '''
     try:
-        tags = ID3(filepath)
-    except ID3NoHeaderError:
-        # print('found none')
-        return
-
-    # load file
-    audio = EasyID3(filepath)
+        wav = wave.WAVE(filepath)
+        id3 = wav.tags
+    except Exception as e:
+        print(f"Error loading wav tags: {e}")
+        return False
+    
     neededTags = ['voice','seed','original_seed','alpha','beta','diffusion_steps','embedding_scale','reference_audio_path','voice_model','rtf','text','date_generated']
+    returnTags = {}
+
     for t in neededTags:
-        audio.RegisterTXXXKey(t, t.upper())
-    return audio
+        tx = f'TXXX:{t}'
+        # print(f'{t}: {id3[tx]}')
+        returnTags[t] = id3[tx]
+
+    return returnTags
 
 def getGenHistory():
     '''
@@ -767,7 +781,8 @@ def getGenHistory():
     genHistoryArray = np.column_stack([fVoice,fSeed,fAlpha,fBeta,fSteps,fScale,fDate])
 
     # historyFileList = tmp_historyFileList
-    return fVoice,genHistoryArray
+    recordCount = len(historyFileList)
+    return recordCount,genHistoryArray
 
 def populateGenHistoryData(value, evt: gr.EventData, sel: gr.SelectData):
     '''
@@ -782,6 +797,29 @@ def populateGenHistoryData(value, evt: gr.EventData, sel: gr.SelectData):
 def UpdateMetadataFlag(value):
     appSettings['enableID3tagging'] = value
     save_settings(appSettings,settingsType='app')
+
+def filterHistoryDF(filterHistoryVoiceSelection,filterHistoryEnteredText):
+    fVoice,fSeed,fAlpha,fBeta,fSteps,fScale,fDate = [],[],[],[],[],[],[]
+
+    for i in genHistory:
+        ftags = genHistory[i]
+        print(ftags['filepath'])
+        #  print(ftags)
+        if (ftags['voice'] in filterHistoryVoiceSelection or 'All' in filterHistoryVoiceSelection or not filterHistoryVoiceSelection or len(filterHistoryVoiceSelection) == 0):
+            if all(substring.lower() in ftags['text'].lower() for substring in filterHistoryEnteredText) or len(filterHistoryEnteredText) == 0:     
+                historyFileList.append(ftags['filepath'])
+                fVoice.append(ftags['voice'])
+                fDate.append(ftags['date_generated'])
+                fSeed.append(ftags['seed'])
+                fAlpha.append(ftags['alpha'])
+                fBeta.append(ftags['beta'])
+                fSteps.append(ftags['diffusion_steps'])
+                fScale.append(ftags['embedding_scale'])
+
+    genHistoryArray = np.column_stack([fVoice,fSeed,fAlpha,fBeta,fSteps,fScale,fDate])
+    recordCount = len(historyFileList)
+
+    return genHistoryArray
     
 
 def main():
@@ -861,13 +899,23 @@ def main():
                             with gr.Accordion("Generation Text", open=False):
                                 generationHistoryText = gr.Markdown("")
 
-                    fVoice,genHistoryArray = getGenHistory()
-                    
+                    recordCount,genHistoryArray = getGenHistory()
+
+                    # grab voices for filter
+                    voiceList = []
+                    voiceList.append('All')
+                    for i in genHistory:
+                        if genHistory[i]['voice'] not in voiceList:
+                            voiceList.append(genHistory[i]['voice'])
+
+                    filterHistoryVoiceSelection = gr.Dropdown(voiceList, value="All", label="Voice Filter", multiselect=True)
+                    filterHistoryEnteredText = gr.Dropdown(label="Text Filter", multiselect=True, allow_custom_value=True)
+
                     historyFiles = gr.Dataframe(
                         headers=["Voice", "Seed", "Alpha", "Beta", "Steps", "Scale", "Date"],
                         datatype=["str", "number", "number", "number", "number", "number", "date"],
                         column_widths=["50px","30px","30px","30px","30px","30px","90px"],
-                        row_count=len(fVoice),
+                        row_count=(0,'dynamic'),
                         col_count=(7, "fixed"),
                         interactive=False,
                         min_width="30px",
@@ -875,6 +923,19 @@ def main():
                         )
                     
                     historyFiles.select(populateGenHistoryData, inputs=[historyFiles], outputs=[selectedFilePlayer,generationHistoryText,generationHistorySettings])
+                    
+                    filterHistoryVoiceSelection.change(filterHistoryDF,
+                                inputs=[filterHistoryVoiceSelection,filterHistoryEnteredText],
+                                outputs=[
+                                    historyFiles
+                                ])
+                    
+                    
+                    filterHistoryEnteredText.change(filterHistoryDF,
+                                inputs=[filterHistoryVoiceSelection,filterHistoryEnteredText],
+                                outputs=[
+                                    historyFiles
+                                ])
 
             with gr.TabItem("Generate Audiobook"):
                 with gr.Column():
