@@ -295,7 +295,7 @@ def generate_audio(text, voice, reference_audio_file, SCDesiredLength, SCMaxLeng
 
 		fileList,genHistoryArray = getGenHistory()
 
-	return audio_opt_path, [[seed_value]], genHistoryArray if appSettings['enableID3tagging'] else None  
+	return audio_opt_path, [[seed_value]], genHistoryArray[["voice", "seed", "date_generated","filepath"]] if appSettings['enableID3tagging'] else None  
 
 def train_model(data):
 	return f"Model trained with data: {data}"
@@ -709,7 +709,7 @@ def tagWAV(filepath,newtags={}):
 	try:
 		for t in newtags:
 			id3.add(TXXX(encoding=3, desc=t, text=str(newtags[t])))
-			print(f"{t}:{newtags[t]}")
+			# print(f"{t}:{newtags[t]}")
 	except Exception as e:
 		print(f"Error tagging wav: {e}")
 
@@ -792,26 +792,18 @@ def getGenHistory():
                        columns=['filepath','voice_model','voice','reference_audio_path','SCDesiredLength','SCMaxLength','date_generated','seed','original_seed','alpha','beta','diffusion_steps','embedding_scale','rtf','text'])
 	genHistory['df'] = genHistoryDF
 	genHistory['originalDF'] = genHistoryDF
-
-	# historyFileList = tmp_historyFileList
-	recordCount = len(historyFileList)
-	return recordCount,genHistory['df']
+	return genHistory['df']
 
 def populateGenHistoryData(value, evt: gr.EventData, sel: gr.SelectData):
 	'''
 		Grabs necessary info for displaying the clicked history record
 	'''
-	print(value)
 	i = sel.index[0]
-	print(value.loc[(value.index == i)].to_dict('index')[i])
 	values = value.loc[(value.index == i)].to_dict('index')[i]
 	if 'filepath' in values.keys():
 		filepath = values['filepath']
-		print(i)
-		print(filepath)
 		df = genHistory['df']
 		record = df.loc[(df.filepath == filepath)].to_dict('index')[i]
-		print(record)
 		audioReturn = os.path.join(".", record['filepath'])
 		textReturn = f"{record['text']}"
 		settingsReturn = np.array(list({k:v for k,v in record.items() if k not in ['text']}.items()))
@@ -972,7 +964,7 @@ def main():
 				with gr.Column():
 					with gr.Row():
 						with gr.Column():
-							recordCount,genHistoryDF = getGenHistory()
+							genHistoryDF = getGenHistory()
 
 							# grab voices for filter
 							voiceList = []
