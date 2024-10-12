@@ -51,7 +51,7 @@ APP_SETTINGS_FILE_PATH = os.path.join(".","Configs","app_settings.yaml")
 GENERATE_SETTINGS = {}
 TRAINING_DIR = "training"
 BASE_CONFIG_FILE_PATH = os.path.join(".","Configs","template_config_ft.yml")
-DEFAULT_VOICE_MODEL = os.path.join(".","models","pretrain_base_1","epochs_2nd_00020.pth")
+DEFAULT_VOICE_MODEL = os.path.join("models","pretrain_base_1","epochs_2nd_00020.pth")
 WHISPER_MODELS = ["tiny", "base", "small", "medium", "large", "large-v1", "large-v2", "large-v3"]
 VALID_AUDIO_EXT = [
 	".mp3",
@@ -79,10 +79,15 @@ generateSettings = {}
 genData = {}
 genHistory = {
 	"df":None,
-	"originalDF":None
+	"originalDF":None,
+	"selectedRecord":None
 }
 genHistoryDF = None
 historyFileList = []
+defaults = {
+	'SCMaxLength': 280, 
+	'SCDesiredLength': 250, 
+}
 
 def load_all_models(model_path):
 	global global_phonemizer, model, model_params, sampler, textcleaner, to_mel, params_whole
@@ -311,20 +316,32 @@ def get_reference_audio_list(voice_name, root="voices"):
 	reference_directory_list = os.listdir(os.path.join(root, voice_name))
 	return reference_directory_list
 
+# def get_voice_models():
+# 	folders_to_browse = ["training", "models"]
+	
+# 	model_list = []
+
+# 	for folder in folders_to_browse:
+# 		# Construct the search pattern
+# 		search_pattern = os.path.join(folder, '**', '*.pth')
+# 		# Use glob to find all matching files, recursively search in subfolders
+# 		matching_files = glob.glob(search_pattern, recursive=True)
+# 		# Extend the model_list with the found files
+# 		model_list.extend(matching_files)
+		
+# 	return model_list
+
 def get_voice_models():
 	folders_to_browse = ["training", "models"]
-	
-	model_list = []
-
+	files = []
 	for folder in folders_to_browse:
-		# Construct the search pattern
-		search_pattern = os.path.join(folder, '**', '*.pth')
-		# Use glob to find all matching files, recursively search in subfolders
-		matching_files = glob.glob(search_pattern, recursive=True)
-		# Extend the model_list with the found files
-		model_list.extend(matching_files)
-		
-	return model_list
+		for root, _, filenames in os.walk(folder):
+			for filename in filenames:
+				if filename.endswith('pth'):
+					files.append(rf"{os.path.join(root, filename)}")
+					# print(rf"{os.path.join(root, filename)}")
+	# print(files)
+	return files
 
 def update_reference_audio(voice):
 	return gr.Dropdown(choices=get_reference_audio_list(voice), value=get_reference_audio_list(voice)[0])
@@ -798,18 +815,14 @@ def populateGenHistoryData(value, evt: gr.EventData, sel: gr.SelectData):
 	'''
 		Grabs necessary info for displaying the clicked history record
 	'''
-	i = sel.index[0]
-	values = value.loc[(value.index == i)].to_dict('index')[i]
-	if 'filepath' in values.keys():
-		filepath = values['filepath']
-		df = genHistory['df']
-		record = df.loc[(df.filepath == filepath)].to_dict('index')[i]
-		audioReturn = os.path.join(".", record['filepath'])
-		textReturn = f"{record['text']}"
-		settingsReturn = np.array(list({k:v for k,v in record.items() if k not in ['text']}.items()))
-	else:
-		print('no filepath')
-		return None, None, None
+
+	filepath = sel.row_value[-1]
+	df = genHistory['df']
+	df = df.loc[(df.filepath == filepath)].reset_index(drop=True)
+	record = df.loc[(df.filepath == filepath)].to_dict('index')[0]
+	audioReturn = os.path.join(".", record['filepath'])
+	textReturn = f"{record['text']}"
+	settingsReturn = np.array(list({k:v for k,v in record.items() if k not in ['text']}.items()))
 	
 	return audioReturn,textReturn,settingsReturn
 				
@@ -861,6 +874,7 @@ def get_training_config(voice):
 def main():
 	initial_settings = load_settings()
 	appSettings = load_settings(settingsType='app')
+	list_of_models = get_voice_models()
 	if voice_list_with_defaults:
 		load_all_models(initial_settings["voice_model"])
 		
@@ -870,8 +884,7 @@ def main():
 		ref_audio_file_choices = None
 
 	with gr.Blocks(css=".gradio-container-4-38-1 table {height: 250px; width: 100%;overflow-x: hidden !important; overflow-y: scroll !important; scrollbar-width: thin !important; padding-right: 17px !important; box-sizing: content-box !important;} ::-webkit-scrollbar {display: none;}") as demo:
-		
-		with gr.Tabs():
+		with gr.Tabs() as tabs:
 			with gr.Tab(id="generation", label="Generation"):
 				with gr.Column():
 					with gr.Row():
@@ -880,6 +893,10 @@ def main():
 						with gr.Column():
 							with gr.Row():
 								with gr.Column():
+									GENERATE_SETTINGS["voice_model"] = gr.Dropdown(
+										choices=list_of_models, interactive=True, label="Voice Models", type="value", value=initial_settings["voice_model"], filterable=True,
+										info="Model to use when inferencing, found in the models and training folders."										
+									)
 									GENERATE_SETTINGS["voice"] = gr.Dropdown(
 										choices=voice_list_with_defaults, label="Voice", type="value", value=initial_settings["voice"],
 										info="Name of folder in voices directory."
@@ -911,8 +928,8 @@ def main():
 								# value as the max length slider is adjusted.
 								initial_settings["SCDesiredLength"] = scDesired
 							def resetSCValues():
-								initial_settings["SCMaxLength"] = 280
-								initial_settings["SCDesiredLength"] = 250
+								initial_settings["SCMaxLength"] = defaults["SCMaxLength"]
+								initial_settings["SCDesiredLength"] = defaults["SCDesiredLength"]
 								
 								return initial_settings["SCMaxLength"],initial_settings["SCDesiredLength"]
 
@@ -978,6 +995,7 @@ def main():
 
 							with gr.Accordion("Generation Settings", open=True):
 								generationHistorySettings = gr.Dataframe(
+									type="pandas",
 									headers=["Option", "Value"],
 									datatype=["str", "str"],
 									column_widths=["30%","70%"],
@@ -987,6 +1005,8 @@ def main():
 									min_width="30px",
 									wrap=True
 									)
+								
+								sendToGenerationTabButton = gr.Button("Send to Generation Tab", variant="primary", size="sm", visible=False)
 
 						with gr.Column():
 							filterHistoryVoiceSelection = gr.Dropdown(
@@ -1008,7 +1028,81 @@ def main():
 								interactive=False,
 								min_width="30px",
 								value=genHistoryDF[["voice", "seed", "date_generated","filepath"]]
-								)					
+								)
+							
+					def updateSendToGenerationTabButton(GenHistorySettings):
+						"""Copies dict of selected history record into a global dict for various uses.
+
+						Args:
+							GenHistorySettings (_type_): _description_
+						"""
+						global genHistory
+						
+						filepath = None
+						tmpGenHistorySettingsDict = GenHistorySettings.to_dict('index')
+						for i in tmpGenHistorySettingsDict:
+							if tmpGenHistorySettingsDict[i]['Option'] == 'filepath':
+								filepath = tmpGenHistorySettingsDict[i]['Value']
+								break
+						if filepath:
+							record = None
+							df = genHistory['df']
+							record = df.loc[(df.filepath == filepath)].reset_index(drop=True).to_dict('index')[0]
+							if record:
+								# make sure max/desired lengths were implemented when this file was generated. If not, replace with defaults
+								record['SCMaxLength'] = defaults['SCMaxLength'] if not record['SCMaxLength'] else record['SCMaxLength']
+								record['SCDesiredLength'] = defaults['SCDesiredLength'] if not record['SCDesiredLength'] else record['SCDesiredLength']
+								genHistory['selectedRecord'] = record
+								# print(record)
+								return gr.Button("Send to Generation Tab", variant="primary", size="sm", visible=True)
+							else:
+								genHistory['selectedRecord'] = None
+								return gr.Button("Send to Generation Tab", variant="primary", size="sm", visible=False)
+						# return gr.Dropdown(choices=voice_list_with_defaults), gr.Dropdown(choices=reference_audio_list), gr.Dropdown(choices=datasets_list), gr.Dropdown(choices=train_list), gr.Dropdown(choices=train_list)
+
+					def sendToGenerationTab():
+						r = genHistory['selectedRecord']
+						# check voicemodel exists
+						if not os.path.exists(os.path.join(r['voice_model'])):
+							print('Voice model from history record no longer exists. Setting to base model instead.')
+							if os.path.exists(DEFAULT_VOICE_MODEL):
+								r['voice_model'] = rf"{DEFAULT_VOICE_MODEL}" # annoying and ugly..
+						else:
+							r['voice_model'] = rf"{r['voice_model']}"#.replace("\\","\\\\\\\\") # annoying and ugly..
+						# check voice directory exists
+						if not os.path.exists(os.path.dirname(r['reference_audio_path'])):
+							print('Voice folder from history record no longer exists.')
+							r['voice'] = None
+							r['reference_audio_path'] = None
+						# check reference audio file path exists
+						if not os.path.exists(os.path.join(r['reference_audio_path'])):
+							print('Reference audio file no longer exists.')
+							r['reference_audio_path'] = None
+
+						return r['text'],r['voice_model'],r['voice'],r['reference_audio_path'],r['SCMaxLength'],r['SCMaxLength'],r['seed'],r['alpha'],r['beta'],r['diffusion_steps'],r['embedding_scale'],gr.Tabs(selected='generation')
+						
+
+					sendToGenerationTabButton.click(sendToGenerationTab,
+								outputs=[
+									GENERATE_SETTINGS["text"],
+									GENERATE_SETTINGS["voice_model"],
+									GENERATE_SETTINGS["voice"],
+									GENERATE_SETTINGS["reference_audio_file"],
+									GENERATE_SETTINGS["SCMaxLength"],
+									GENERATE_SETTINGS["SCDesiredLength"],
+									GENERATE_SETTINGS["seed"],
+									GENERATE_SETTINGS["alpha"],
+									GENERATE_SETTINGS["beta"],
+									GENERATE_SETTINGS["diffusion_steps"],
+									GENERATE_SETTINGS["embedding_scale"],
+									tabs
+								]
+								)#.success(lambda: gr.update(value=rf"{os.path.join(genHistory['selectedRecord']['reference_audio_path'])}"), outputs=GENERATE_SETTINGS["reference_audio_file"])
+							
+					generationHistorySettings.change(updateSendToGenerationTabButton,
+								inputs=[generationHistorySettings],
+								outputs=[sendToGenerationTabButton]
+								)
 					
 					historyFiles.select(populateGenHistoryData, inputs=[historyFiles], outputs=[selectedFilePlayer,generationHistoryText,generationHistorySettings])
 					
@@ -1170,7 +1264,6 @@ def main():
 									batch_size = gr.Slider(label="Batch Size", minimum=1, maximum=100, step=1, value=1)
 									max_len = gr.Slider(label="Max Length", minimum=50, maximum=1000, step=10, value=160) # personal max, allows for generation during training without pushing into shared mem.
 									rolling_model_retention_count = gr.Slider(label="Rolling Model Retention", minimum=1, maximum=10000, step=1, value=50)
-									list_of_models = get_voice_models()
 
 									with gr.Row():
 										pretrained_model = gr.Dropdown(
@@ -1338,8 +1431,6 @@ def main():
 				list_of_models = get_voice_models()
 				with gr.Row():
 					with gr.Column():
-						GENERATE_SETTINGS["voice_model"] = gr.Dropdown(
-							choices=list_of_models, interactive=True, label="Voice Models", type="value", value=initial_settings["voice_model"], scale=6)
 						refresh_models_available_button = gr.Button(
 							value="Refresh Models Available", scale=1, variant='primary')
 						unload_all_models_button = gr.Button(
