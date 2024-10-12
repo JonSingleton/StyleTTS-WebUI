@@ -994,6 +994,7 @@ def main():
 								generationHistoryText = gr.Markdown("No history record selected")
 
 							with gr.Accordion("Generation Settings", open=True):
+								sendToGenerationTabButton = gr.Button("Send to Generation Tab", variant="primary", size="sm", visible=False)
 								generationHistorySettings = gr.Dataframe(
 									type="pandas",
 									headers=["Option", "Value"],
@@ -1006,7 +1007,6 @@ def main():
 									wrap=True
 									)
 								
-								sendToGenerationTabButton = gr.Button("Send to Generation Tab", variant="primary", size="sm", visible=False)
 
 						with gr.Column():
 							filterHistoryVoiceSelection = gr.Dropdown(
@@ -1078,9 +1078,15 @@ def main():
 						if not os.path.exists(os.path.join(r['reference_audio_path'])):
 							print('Reference audio file no longer exists.')
 							r['reference_audio_path'] = None
+						else:
+							r['reference_audio_path'] = os.path.basename(r['reference_audio_path'])
 
 						return r['text'],r['voice_model'],r['voice'],r['reference_audio_path'],r['SCMaxLength'],r['SCMaxLength'],r['seed'],r['alpha'],r['beta'],r['diffusion_steps'],r['embedding_scale'],gr.Tabs(selected='generation')
 						
+					def updateVoiceReferenceFileDropdown():
+						time.sleep(.5)
+						print('updating')
+						return os.path.basename(genHistory['selectedRecord']['reference_audio_path'])
 
 					sendToGenerationTabButton.click(sendToGenerationTab,
 								outputs=[
@@ -1097,7 +1103,7 @@ def main():
 									GENERATE_SETTINGS["embedding_scale"],
 									tabs
 								]
-								)#.success(lambda: gr.update(value=rf"{os.path.join(genHistory['selectedRecord']['reference_audio_path'])}"), outputs=GENERATE_SETTINGS["reference_audio_file"])
+								).success(updateVoiceReferenceFileDropdown, outputs=GENERATE_SETTINGS["reference_audio_file"])
 							
 					generationHistorySettings.change(updateSendToGenerationTabButton,
 								inputs=[generationHistorySettings],
