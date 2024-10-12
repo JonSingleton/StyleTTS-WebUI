@@ -456,7 +456,7 @@ def convert_ebook_to_audio(ebook_file, progress=gr.Progress()):
         inferencesETA = remainingInferences * secPerInference
         allInferencesETAList.append(inferencesETA)
         currentAverageETA = round(sum(allInferencesETAList) / len(allInferencesETAList),2)
-        currentAverageETA = str(datetime.timedelta(currentAverageETA=666))
+        currentAverageETA = str(datetime.timedelta(currentAverageETA))
 
         return currentAverageETA
 
