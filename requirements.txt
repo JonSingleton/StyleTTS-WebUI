@@ -1,6 +1,5 @@
 SoundFile==0.12.1
 munch==4.0.0
-torch==2.3.1+cu121
 pydub==0.25.1
 pyyaml==6.0.1
 librosa==0.10.2.post1
@@ -14,7 +13,7 @@ tqdm==4.66.4
 typing==3.7.4.3
 typing-extensions==4.12.2
 phonemizer==3.2.1
-gradio==4.38.1
+gradio==4.44.0
 pysrt==1.1.2
 tensorboard==2.17.0
 ebooklib==0.18
@@ -26,3 +25,8 @@ pysrt==1.1.2
 
 git+https://github.com/m-bain/whisperx.git@58f00339af7dcc9705ef49d97a1f40764b7cf555
 git+https://github.com/resemble-ai/monotonic_align.git@78b985be210a03d08bc3acc01c4df0442105366f
+
+--extra-index-url https://download.pytorch.org/whl/cu121
+torch==2.3.1
+torchvision==0.18.1 
+torchaudio==2.3.1

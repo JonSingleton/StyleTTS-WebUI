@@ -298,7 +298,7 @@ def generate_audio(text, voice, reference_audio_file, SCDesiredLength, SCMaxLeng
 
 		tagWAV(output_wav_path,ID3Tags)
 
-		fileList,genHistoryArray = getGenHistory()
+		genHistoryArray = getGenHistory()
 
 	return audio_opt_path, [[seed_value]], genHistoryArray[["voice", "seed", "date_generated","filepath"]] if appSettings['enableID3tagging'] else None  
 
@@ -1081,7 +1081,7 @@ def main():
 						else:
 							r['reference_audio_path'] = os.path.basename(r['reference_audio_path'])
 
-						return r['text'],r['voice_model'],r['voice'],r['reference_audio_path'],r['SCMaxLength'],r['SCMaxLength'],r['seed'],r['alpha'],r['beta'],r['diffusion_steps'],r['embedding_scale'],gr.Tabs(selected='generation')
+						return r['text'],r['voice_model'],r['voice'],r['reference_audio_path'],int(r['SCMaxLength']),int(r['SCMaxLength']),int(r['seed']),int(r['alpha']),int(r['beta']),int(r['diffusion_steps']),int(r['embedding_scale']),gr.Tabs(selected='generation')
 						
 					def updateVoiceReferenceFileDropdown():
 						time.sleep(.5)
@@ -1103,7 +1103,9 @@ def main():
 									GENERATE_SETTINGS["embedding_scale"],
 									tabs
 								]
-								).success(updateVoiceReferenceFileDropdown, outputs=GENERATE_SETTINGS["reference_audio_file"])
+								).success(updateVoiceReferenceFileDropdown, 
+				  					outputs=GENERATE_SETTINGS["reference_audio_file"]
+								)#.success(update_voice_model,inputs=GENERATE_SETTINGS["voice_model"])
 							
 					generationHistorySettings.change(updateSendToGenerationTabButton,
 								inputs=[generationHistorySettings],
