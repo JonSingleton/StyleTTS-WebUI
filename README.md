@@ -19,14 +19,9 @@ An all-in-one inferencing and training WebUI for StyleTTS.  The intended compatb
 ## Setup
 There is no Linux or Mac set-up at the moment. However, I think the set-up on linux isn't too convoluted as it doesn't require any code modifications, just installation modifications.  I believe you do not need to uninstall and reinstall torch and then the back slashes should be replaced with forward slashes in the commands below.
 
-### Windows Package
-Is available for Youtube Channel Members at the Supporter (Package) level: https://www.youtube.com/channel/UCwNdsF7ZXOlrTKhSoGJPnlQ/join
-
 **Minimum Requirements**
 - Nvidia Graphics Card (12GB VRAM is the minimum recommendation for training at a decent speed, 8GB possible though, albeit very slow. See below troubleshooting for more information)
 - Windows 10/11
-1. After downloading the zip file, unzip it.
-2. Launch the webui with launch_webui.bat
 
 ### Manual Installation (Windows only)
 **Prerequisites**
@@ -55,44 +50,47 @@ py -3.11 -m venv venv
 ```
 pip install -r .\requirements.txt
 ```
-6. Uninstall and reinstall torch manually as windows does not particularly like just installing torch, you need to install prebuilt wheels.
-> **NOTE:** torch installed with 2.4.0 or higher was causing issues with cudnn and cublas dlls not being found (presumed due to ctranslate2).  Make sure you use 2.3.1 as specified in the command below.
-```
-pip uninstall torch
-pip install torch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1 --index-url https://download.pytorch.org/whl/cu121
-```
-7. Initialize submodules in the repository
+  - 5.1. Check torch, if it is greater than 2.3.1, uninstall and reinstall, else, you can continue on and no need to run the below:
+    ```
+    pip show torch
+    ```
+    If greater than 2.3.1, uninstall and reinstall:
+    ```
+    pip uninstall torch
+    pip install torch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1 --index-url https://download.pytorch.org/whl/cu121
+    ```
+6. Initialize submodules in the repository
 ```
 git submodule init
 git submodule update --remote
 ```
-8. Install the StyleTTS2 package into venv
+7. Install the StyleTTS2 package into venv
 ```
 pip install .\modules\StyleTTS2\
 ```
-9. Download the pretrained StyleTTS2 Model and yaml here:https://huggingface.co/yl4579/StyleTTS2-LibriTTS/tree/main/Models/LibriTTS.  You'll need to place them into the folder ```pretrain_base_1``` inside of the ```models``` folder.  The file structure should look like the below.
+8. Download the pretrained StyleTTS2 Model and yaml here:https://huggingface.co/yl4579/StyleTTS2-LibriTTS/tree/main/Models/LibriTTS.  You'll need to place them into the folder ```pretrain_base_1``` inside of the ```models``` folder. The file structure should look like the below.
 ```
 models\pretrain_base_1\epochs_2nd_00020.pth
 models\pretrain_base_1\config.yml
 ```
-10. Install eSpeak-NG onto your computer.  Head over to https://github.com/espeak-ng/espeak-ng/releases and select the ```espeak-ng-X64.msi``` the assets dropdown.  Download, run, and follow the prompts to set it up on your device.  As of this write-up, it'll be at the bottom of 1.51 on the github releases page
+9. Install eSpeak-NG onto your computer.  Head over to https://github.com/espeak-ng/espeak-ng/releases and select the ```espeak-ng-X64.msi``` the assets dropdown.  Download, run, and follow the prompts to set it up on your device.  As of this write-up, it'll be at the bottom of 1.51 on the github releases page
 > You can remove the program by going to "Add or remove programs" on your computer, then searching for espeak.
-11. Download punkt by running the below python script:
+10. Download punkt by running the below python script:
 ```
 python .\modules\StyleTTS2\styletts2\download_punkt.py
 ```
-12.. Run the StyleTTS2 Webui
+11.. Run the StyleTTS2 Webui
 ```
 python webui.py
 ```
-13. (Optional) Make a .bat file to automatically run the webui.py each time without having to activate venv each time. How to: https://www.windowscentral.com/how-create-and-run-batch-file-windows-10
+12. (Optional) Make a .bat file to automatically run the webui.py each time without having to activate venv each time. How to: https://www.windowscentral.com/how-create-and-run-batch-file-windows-10
 ```
 call venv\Scripts\activate
 python webui.py
 ```
 
 ## Usage
-There are 3 Tabs: Generation, Training, and Settings
+There are 5 Tabs: Generation, History, Generate Audiobook, Training, and Settings
 
 ### Generation
 Before you start generating, you need a small reference audio file (preferably wave file) to generate style vectors from.  This can be used for "zero shot" cloning as well, but you'll do the same thing for generating after training a model.
@@ -103,7 +101,21 @@ voices/name_of_your_speaker/reference_audio.wav
 ```
 If you had already launched the webui, click on the ```Update Voices``` button and it'll update the voices that are now available to choose from.
 
-One thing to note is the ```Settings``` tab contains the StyleTTS models that are available, but by default, if no training has been done, the base pretrained model will be selected.  After training, you'll be able to change what model is loaded.
+One thing to note is by default, if no training has been done, the base pretrained model will be selected. After training, you'll be able to change what model is loaded.
+
+### History
+Contains a history of all generated files, along with the settings used to generate them. Generated items are added to the history automatically. All history data is managed by ID3 tags added to each generated file the includes all the generation settings used. If you do not wish to tag your files (thus prevent them from showing up in the history tab), you can disable ID3 tagging in the Settings tab.
+
+There is also a "Send to Generation" button that is loaded when selecting a generated file from the dataframe list. This should copy all the generation settings over to the generation tab, switch the voice model, and allow you to just click generate, or make any adjustments needed beforehand.
+
+### Generate Audiobook
+This is a crude implementation of using a model to generate a full audiobook. Drag and drop any common ebook format into the form and click "Convert to Audiobook". It will:
+   1. Split the chapters into individual text files and process them all for inferencing.
+   2. Convert numbers (such as 50) into spoken language (ie: fifty). This is something I implemented to circumvent an issue where some indexes contain a lot of numbers and this caused the voice to become very distorted or altogether error out due to tensor size exceeding 505. The caveat to this fix is that it doesn't use natural speech based on context, for example if the book mentions a date (say 2024) it will not say "twnty twenty four", rather "two thousand and twenty four". It's not ideal, and I'm sure there's a way to get that to work, but as stated this is just a crude implementation. Feel free to open a PR if you have a better method!
+   3. Break each chapter down to individual inferences and process them. Each individual inference is stored in a file-like object until the full chapter is completed. On completion of each chapter it will combine them all, snipping 80ms off each end of each inference (due to common issues with artifacts in synthesized speach if it's a trained model and the dataset wasn't pristine), and finally write each chapter to disk in the working directory for that specific book within the audiobooks folder. It keeps each chapter in a file-like object as well, which makes things quicker later when combining all the chapters. The files are really only there to be able to resume from the last chapter if you stop and restart the process.
+   4. Once all chapters are generated, it combines them and generates a .m4b audiobook file which includes the book cover (as long as it's present in the ebook file) and outputs it to the audiobooks folder.
+
+Notes: If you stop mid-process, you can resume the generation by uploading the ebook again from step 1 as long has the filename hasn't changed. If you cancel and want to restart generation entirely, delete the working directory from the audiobooks folder first.
 
 |Field      |Description|
 |-----------|-----------|
@@ -165,6 +177,7 @@ Here are some that I came across:
 
 ## Acknowledgements
 Huge thanks to the developers responsible for developing StyleTTS2: https://github.com/yl4579/StyleTTS2
+Another huge thanks to Jarod for throwing the initial three tabs of generation/training/settings to get the ball rolling on using StyleTTS2 in Gradio with training integrated directly and easily.
 
 ## Usage Notice
 The base pre-trained StyleTTS2 model used here comes with a License of:
