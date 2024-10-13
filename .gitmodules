@@ -1,9 +1,9 @@
 [submodule "modules/StyleTTS2"]
 	path = modules/StyleTTS2
-	url = https://github.com/JonSingleton/StyleTTS2.git
+	url = https://github.com/JonSingleton/StyleTTS2
 [submodule "modules/tortoise_dataset_tools"]
 	path = modules/tortoise_dataset_tools
-	url = https://github.com/JonSingleton/tortoise_dataset_tools.git
+	url = https://github.com/JonSingleton/tortoise_dataset_tools
 [submodule "modules/styletts2_phonemizer"]
 	path = modules/styletts2_phonemizer
-	url = https://github.com/JonSingleton/styletts2_phonemizer.git
+	url = https://github.com/JonSingleton/styletts2_phonemizer
