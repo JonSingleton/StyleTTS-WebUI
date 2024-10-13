@@ -401,8 +401,8 @@ def load_settings(settingsType='generate'):
 				"text": "Inferencing with this sentence, just to make sure things work!",
 				"voice": voice,
 				"reference_audio_file": reference_file,
-				"SCDesiredLength":250, 
-				"SCMaxLength":280,
+				"SCDesiredLength":defaults['SCDesiredLength'],
+				"SCMaxLength":defaults['SCMaxLength'],
 				"seed" : "-1",
 				"alpha": 0.3,
 				"beta": 0.7,
@@ -1073,7 +1073,7 @@ def main():
 						if not os.path.exists(os.path.dirname(r['reference_audio_path'])):
 							print('Voice folder from history record no longer exists.')
 							r['voice'] = None
-							r['reference_audio_path'] = None
+							# r['reference_audio_path'] = None
 						# check reference audio file path exists
 						if not os.path.exists(os.path.join(r['reference_audio_path'])):
 							print('Reference audio file no longer exists.')
@@ -1081,7 +1081,7 @@ def main():
 						else:
 							r['reference_audio_path'] = os.path.basename(r['reference_audio_path'])
 
-						return r['text'],r['voice_model'],r['voice'],r['reference_audio_path'],int(r['SCMaxLength']),int(r['SCMaxLength']),int(r['seed']),int(r['alpha']),int(r['beta']),int(r['diffusion_steps']),int(r['embedding_scale']),gr.Tabs(selected='generation')
+						return r['text'],r['voice_model'],r['voice'],r['reference_audio_path'],int(str(r['SCMaxLength'])),int(str(r['SCDesiredLength'])),int(r['seed']),float(r['alpha']),float(r['beta']),int(r['diffusion_steps']),float(r['embedding_scale']),gr.Tabs(selected='generation')
 						
 					def updateVoiceReferenceFileDropdown():
 						time.sleep(.5)
