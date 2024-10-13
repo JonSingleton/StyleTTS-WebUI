@@ -10,7 +10,7 @@ An all-in-one inferencing and training WebUI for StyleTTS.  The intended compatb
 
 ✔️ Audiobook generation tab that creates a full m4b audiobook from a dragged-and-dropped ebook.
 
-✔️ History tab populated using ID3 tags embedded on each generated file.
+✔️ History tab populated using ID3 tags embedded on each generated file, and a "Send to Generation Tab" button to make it easier to repeat preferred settings.
 
 
 ***** note that this is a fork of the initial work to put this in a webui by Jarod Mica - https://github.com/JarodMica?tab=repositories. This is just my little version with QOL changes that suit me.
@@ -115,7 +115,9 @@ This is a crude implementation of using a model to generate a full audiobook. Dr
    3. Break each chapter down to individual inferences and process them. Each individual inference is stored in a file-like object until the full chapter is completed. On completion of each chapter it will combine them all, snipping 80ms off each end of each inference (due to common issues with artifacts in synthesized speach if it's a trained model and the dataset wasn't pristine), and finally write each chapter to disk in the working directory for that specific book within the audiobooks folder. It keeps each chapter in a file-like object as well, which makes things quicker later when combining all the chapters. The files are really only there to be able to resume from the last chapter if you stop and restart the process.
    4. Once all chapters are generated, it combines them and generates a .m4b audiobook file which includes the book cover (as long as it's present in the ebook file) and outputs it to the audiobooks folder.
 
-Notes: If you stop mid-process, you can resume the generation by uploading the ebook again from step 1 as long has the filename hasn't changed. If you cancel and want to restart generation entirely, delete the working directory from the audiobooks folder first.
+Audiobook Notes: 
+-The full audiobook is generated using the settings last used to generate under the Generation tab. Be sure you run at least one generation after modifying the settings on that tab - it won't use settings that were changed without having done at least one generation afterward. This is because it simply pulls the settings from the configuration file that is updated each time a you generate audio.
+-If you stop mid-process, you can resume the generation by uploading the ebook again from step 1 as long has the filename hasn't changed. If you cancel and want to restart generation entirely, delete the working directory from the audiobooks folder first.
 
 |Field      |Description|
 |-----------|-----------|
