@@ -37,7 +37,7 @@ Is available for Youtube Channel Members at the Supporter (Package) level: https
 - Microsoft build tools, follow: https://stackoverflow.com/questions/64261546/how-to-solve-error-microsoft-visual-c-14-0-or-greater-is-required-when-inst/64262038#64262038
 1. Clone the repository
 ```
-git clone https://github.com/JarodMica/StyleTTS-WebUI.git](https://github.com/JonSingleton/StyleTTS-WebUI
+git clone https://github.com/JonSingleton/StyleTTS-WebUI
 ```
 2. Navigate into the repo
 ```
